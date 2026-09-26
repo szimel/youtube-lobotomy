@@ -1,0 +1,26 @@
+[
+  {
+    "video_id": "C5KPenVUHew",
+    "title": "Tailscale vs WireGuard vs Headscale: Who Holds Your Keys?",
+    "channel_name": "Devsplainers",
+    "description": "",
+    "thumbnail_url": "https://i.ytimg.com/vi/C5KPenVUHew/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLBkPRxFNS484jtN0-Iem8k4EHQIaA",
+    "curation_reason": "This video provides a deep dive into networking and security, comparing different VPN technologies, which is valuable for learning about server configuration and networking."
+  },
+  {
+    "video_id": "PN8EdlYyuXk",
+    "title": "Can a Homemade Water Wheel Generate Electricity?",
+    "channel_name": "Orange made",
+    "description": "",
+    "thumbnail_url": "https://i.ytimg.com/vi/PN8EdlYyuXk/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAP2asSj6_8Bqa8MhK1lCMZEWfofQ",
+    "curation_reason": "This video explores a tangible hardware modification and renewable energy project, fitting the user's interest in creative real-world activities."
+  },
+  {
+    "video_id": "HfSO-LCKmrA",
+    "title": "There\u2019s a Class 100 semiconductor cleanroom inside this backyard shed.",
+    "channel_name": "Dr.Semiconductor",
+    "description": "",
+    "thumbnail_url": "https://i.ytimg.com/vi/HfSO-LCKmrA/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAF7o2lcYeNkQFe0LaEtGocuRh1AQ",
+    "curation_reason": "This video likely covers a unique and educational hardware project involving semiconductor technology, fitting the criteria for tangible hardware modifications."
+  }
+]

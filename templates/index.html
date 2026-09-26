@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e8">
+    <title>Productivity Feed</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div>
+          <p class="eyebrow">Curated YouTube</p>
+          <h1>Productivity Feed</h1>
+        </div>
+        <div class="header-actions">
+          <form id="search-form" class="search-form" role="search">
+            <label class="visually-hidden" for="search-query">Search YouTube</label>
+            <input
+              id="search-query"
+              class="search-input"
+              name="query"
+              type="search"
+              maxlength="200"
+              placeholder="Search videos"
+              autocomplete="off"
+            >
+          </form>
+          <p id="status" class="status" aria-live="polite">Ready</p>
+          <button id="refresh-feed" class="button button-primary" type="button">
+            Refresh feed
+          </button>
+          <button id="open-settings" class="button button-secondary" type="button">
+            Settings
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="feed-section" aria-labelledby="feed-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Right now</p>
+              <h2 id="feed-heading">Current feed</h2>
+            </div>
+            <p id="feed-count" class="item-count">0 videos</p>
+          </div>
+          <div id="feed-list" class="video-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="feed-section" aria-labelledby="watch-later-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Keep</p>
+              <h2 id="watch-later-heading">Watch later</h2>
+            </div>
+            <p id="watch-later-count" class="item-count">0 saved</p>
+          </div>
+          <div id="watch-later-list" class="video-grid" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="settings-dialog" class="settings-dialog">
+      <form method="dialog" class="settings-dialog-header">
+        <h2>Settings</h2>
+        <button class="button button-quiet" type="submit">Close</button>
+      </form>
+
+      <details class="settings-section" open>
+        <summary>Trusted creators</summary>
+        <div class="settings-section-body">
+          <p class="settings-hint">
+            Videos from these channels always reach the feed, even if the AI would reject them.
+          </p>
+          <form id="trusted-creator-form" class="creator-form">
+            <label class="visually-hidden" for="trusted-creator-name">Channel name</label>
+            <input
+              id="trusted-creator-name"
+              class="search-input"
+              name="name"
+              type="text"
+              maxlength="200"
+              placeholder="Exact channel name"
+              autocomplete="off"
+            >
+            <button class="button button-secondary" type="submit">Add creator</button>
+          </form>
+          <p id="trusted-creators-status" class="status" aria-live="polite"></p>
+          <p id="trusted-creators-count" class="item-count">0 creators</p>
+          <ul id="trusted-creators-list" class="creator-list" aria-live="polite"></ul>
+        </div>
+      </details>
+
+      <details class="settings-section">
+        <summary>Test a video</summary>
+        <div class="settings-section-body">
+          <p class="settings-hint">
+            Paste a YouTube link to see whether the curator would approve the video.
+            Nothing is added to the feed.
+          </p>
+          <form id="test-video-form" class="creator-form">
+            <label class="visually-hidden" for="test-video-url">YouTube video URL</label>
+            <input
+              id="test-video-url"
+              class="search-input"
+              name="url"
+              type="text"
+              placeholder="https://www.youtube.com/watch?v=..."
+              autocomplete="off"
+            >
+            <button class="button button-secondary" type="submit">Test video</button>
+          </form>
+          <p id="test-video-status" class="status" aria-live="polite"></p>
+          <div id="test-video-result" class="test-video-result" aria-live="polite"></div>
+        </div>
+      </details>
+
+      <details class="settings-section">
+        <summary>Feed settings</summary>
+        <div class="settings-section-body">
+          <p class="settings-hint">
+            How many candidate videos are pulled and sent to the AI for each action.
+          </p>
+          <form id="candidate-limits-form" class="candidate-limits-form">
+            <label for="refresh-candidate-limit">Videos per refresh</label>
+            <input
+              id="refresh-candidate-limit"
+              name="refresh_candidate_limit"
+              type="number"
+              min="1"
+              max="50"
+              required
+            >
+            <label for="search-candidate-limit">Videos per search</label>
+            <input
+              id="search-candidate-limit"
+              name="search_candidate_limit"
+              type="number"
+              min="1"
+              max="50"
+              required
+            >
+            <button class="button button-secondary" type="submit">Save</button>
+          </form>
+          <p id="feed-settings-status" class="status" aria-live="polite"></p>
+        </div>
+      </details>
+
+      <details class="settings-section">
+        <summary>Curation prompt</summary>
+        <div class="settings-section-body">
+          <p class="settings-hint">
+            This instruction is sent to the AI with every refresh, search, and video test.
+          </p>
+          <form id="curation-prompt-form" class="curation-prompt-form">
+            <label class="visually-hidden" for="curation-prompt">Curation prompt</label>
+            <textarea
+              id="curation-prompt"
+              name="curation_prompt"
+              rows="16"
+              maxlength="20000"
+              required
+            ></textarea>
+            <div class="curation-prompt-actions">
+              <button id="restore-default-prompt" class="button button-quiet" type="button">
+                Restore default
+              </button>
+              <button class="button button-secondary" type="submit">Save prompt</button>
+            </div>
+          </form>
+          <p id="curation-prompt-status" class="status" aria-live="polite"></p>
+        </div>
+      </details>
+    </dialog>
+
+    <template id="empty-state-template">
+      <p class="empty-state"></p>
+    </template>
+    <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+Flask==3.1.2
+openai==3.9.0
+python-dotenv==1.1.0
+yt-dlp==2026.8.19
