@@ -217,7 +217,13 @@ h2 {
   background: #20271f;
 }
 
-.player iframe {
+.player-target {
+  width: 100%;
+  height: 100%;
+}
+
+.player iframe,
+.player-target iframe {
   display: block;
   width: 100%;
   height: 100%;
@@ -261,6 +267,7 @@ h3 {
 .video-actions {
   display: flex;
   justify-content: end;
+  gap: 8px;
   padding: 8px 16px 16px;
 }
 
@@ -444,6 +451,65 @@ h3 {
   font-style: italic;
 }
 
+.watch-log-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  /* Sticky so the warning can never be scrolled past mid-feed: the whole
+     point is that the user finds out without going looking for it. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 20px 0 0;
+  border: 1px solid #ba6245;
+  border-left: 6px solid #9d381e;
+  border-radius: 6px;
+  background: #f8e4da;
+  box-shadow: 0 4px 12px rgb(60 30 20 / 18%);
+  padding: 16px 20px;
+}
+
+.watch-log-banner[hidden] {
+  display: none;
+}
+
+.watch-log-banner h2 {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.watch-log-banner p {
+  margin: 6px 0 0;
+  color: #6b2c17;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.watch-log-banner-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.watch-log-detail {
+  display: grid;
+  gap: 4px;
+  color: #51614e;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.watch-log-detail p {
+  margin: 0;
+}
+
+.watch-log-detail .is-missing {
+  color: #9d381e;
+}
+
 @media (max-width: 640px) {
   .page-shell {
     width: min(100% - 32px, 1440px);
@@ -451,9 +517,14 @@ h3 {
 
   .site-header,
   .header-actions,
-  .section-heading {
+  .section-heading,
+  .watch-log-banner {
     align-items: start;
     flex-direction: column;
+  }
+
+  .watch-log-banner-actions {
+    width: 100%;
   }
 
   .site-header {

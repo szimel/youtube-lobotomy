@@ -37,6 +37,21 @@
         </div>
       </header>
 
+      <section id="watch-log-banner" class="watch-log-banner" role="status" hidden>
+        <div class="watch-log-banner-text">
+          <h2 id="watch-log-banner-title">Your watches aren't reaching YouTube</h2>
+          <p id="watch-log-banner-detail"></p>
+        </div>
+        <div class="watch-log-banner-actions">
+          <button id="watch-log-banner-fix" class="button button-primary" type="button">
+            Open YouTube to fix
+          </button>
+          <button id="watch-log-banner-recheck" class="button button-secondary" type="button">
+            Check again
+          </button>
+        </div>
+      </section>
+
       <main>
         <section class="feed-section" aria-labelledby="feed-heading">
           <div class="section-heading">
@@ -173,6 +188,23 @@
           <p id="curation-prompt-status" class="status" aria-live="polite"></p>
         </div>
       </details>
+      <details class="settings-section">
+        <summary>YouTube logging</summary>
+        <div class="settings-section-body">
+          <p class="settings-hint">
+            A watch only reaches your YouTube history — and your recommendations —
+            while the embedded player still recognises you as signed in. It can
+            lapse silently, so this app reads your history back and reports any
+            video you watched here that never arrived.
+          </p>
+          <form id="watch-log-form" class="creator-form">
+            <button class="button button-secondary" type="submit">Check now</button>
+          </form>
+          <p id="watch-log-status" class="status" aria-live="polite"></p>
+          <div id="watch-log-detail" class="watch-log-detail"></div>
+        </div>
+      </details>
+
     </dialog>
 
     <template id="empty-state-template">

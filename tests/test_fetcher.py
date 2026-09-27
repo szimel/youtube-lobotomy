@@ -1,5 +1,7 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -342,6 +344,106 @@ class FetcherTestCase(unittest.TestCase):
 
         self.assertEqual([video["video_id"] for video in videos], ["aaaaaaaaaaa"])
         curate.assert_called_once_with([])
+
+    def test_watch_history_entries_requests_the_history_url_with_cookies(self):
+        seen = {}
+
+        class FakeYoutubeDL:
+            def __init__(self, options):
+                self.options = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, url, download=False):
+                seen["url"] = url
+                seen["options"] = self.options
+                return {"entries": []}
+
+        with patch("fetcher.yt_dlp.YoutubeDL", FakeYoutubeDL):
+            fetcher._watch_history_entries("data/cookies.txt", 25)
+
+        self.assertEqual(seen["url"], fetcher.WATCH_HISTORY_URL)
+        self.assertEqual(seen["options"]["cookiefile"], "data/cookies.txt")
+        self.assertEqual(seen["options"]["playlist_items"], "1:25")
+
+    def test_watch_history_entries_detects_rotated_cookies(self):
+        class FakeYoutubeDL:
+            def __init__(self, options):
+                self.options = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, url, download=False):
+                self.options["logger"].warning(
+                    "The provided YouTube account cookies are no longer valid. "
+                    "They have likely been rotated in the browser."
+                )
+                return {"entries": []}
+
+        with patch("fetcher.yt_dlp.YoutubeDL", FakeYoutubeDL):
+            with self.assertRaises(ProviderConfigurationError):
+                fetcher._watch_history_entries("data/cookies.txt", 30)
+
+    def test_fetch_watch_history_normalizes_and_deduplicates_entries(self):
+        entries = [
+            {
+                "id": "aaaaaaaaaaa",
+                "title": "Newest watch",
+                "channel": "Channel A",
+                "thumbnails": [
+                    {"url": "https://image/low", "width": 120, "height": 90},
+                    {"url": "https://image/high", "width": 360, "height": 202},
+                ],
+            },
+            {"id": "aaaaaaaaaaa", "title": "Duplicate"},
+            {"id": "bbbbbbbbbbb", "title": "Older watch", "channel": "Channel B"},
+            {"id": "", "title": "Missing id is skipped"},
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            cookie_path = Path(directory) / "cookies.txt"
+            cookie_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+            with patch(
+                "fetcher._relative_environment_path", return_value=cookie_path
+            ), patch("fetcher._watch_history_entries", return_value=entries) as history:
+                videos = fetcher.fetch_watch_history(limit=7)
+
+        self.assertEqual(history.call_args.args[1], 7)
+        self.assertTrue(str(history.call_args.args[0]).endswith("cookies.txt"))
+        self.assertEqual(
+            [video["video_id"] for video in videos], ["aaaaaaaaaaa", "bbbbbbbbbbb"]
+        )
+        self.assertEqual(videos[0]["thumbnail_url"], "https://image/high")
+        self.assertEqual(videos[0]["channel_name"], "Channel A")
+
+    def test_fetch_watch_history_reports_missing_cookies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing_path = Path(directory) / "cookies.txt"
+            with patch("fetcher._relative_environment_path", return_value=missing_path):
+                with self.assertRaises(fetcher.LiveWatchLogUnavailableError):
+                    fetcher.fetch_watch_history()
+
+    def test_fetch_watch_history_reports_rotated_cookies(self):
+        with patch(
+            "fetcher._watch_history_entries",
+            side_effect=ProviderConfigurationError("cookies rotated"),
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                cookie_path = Path(directory) / "cookies.txt"
+                cookie_path.write_text("placeholder", encoding="utf-8")
+                with patch(
+                    "fetcher._relative_environment_path", return_value=cookie_path
+                ):
+                    with self.assertRaises(fetcher.LiveWatchLogUnavailableError):
+                        fetcher.fetch_watch_history()
 
     def test_parse_video_id_accepts_bare_ids_and_common_url_shapes(self):
         video_id = "dQw4w9WgXcQ"

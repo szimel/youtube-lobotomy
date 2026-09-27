@@ -2,6 +2,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -12,8 +13,10 @@ from fetcher import (
     LiveFeedUnavailableError,
     LiveSearchUnavailableError,
     LiveTestUnavailableError,
+    LiveWatchLogUnavailableError,
     ProviderRequestError,
     evaluate_video,
+    fetch_watch_history,
     refresh_feed as fetch_latest_feed,
     search_and_filter_videos,
 )
@@ -24,6 +27,8 @@ MAX_CREATOR_NAME_LENGTH = 200
 MIN_CANDIDATE_LIMIT = 1
 MAX_CANDIDATE_LIMIT = 50
 MAX_CURATION_PROMPT_LENGTH = 20_000
+MAX_WATCH_LOG_IDS = 50
+WATCH_HISTORY_CACHE_SECONDS = 45.0
 DEFAULT_SETTINGS = {
     "refresh_candidate_limit": fetcher.MAX_CANDIDATES,
     "search_candidate_limit": fetcher.MAX_CANDIDATES,
@@ -159,6 +164,23 @@ def normalize_video_url(payload: object) -> tuple[str | None, str | None]:
     return url.strip(), None
 
 
+def normalize_video_ids(payload: object) -> tuple[list[str] | None, str | None]:
+    if not isinstance(payload, dict):
+        return None, "Request body must be a JSON object."
+
+    video_ids = payload.get("video_ids")
+    if not isinstance(video_ids, list) or not video_ids:
+        return None, "video_ids must be a non-empty list."
+    if len(video_ids) > MAX_WATCH_LOG_IDS:
+        return None, f"video_ids must contain {MAX_WATCH_LOG_IDS} or fewer IDs."
+
+    for video_id in video_ids:
+        if not isinstance(video_id, str) or not VIDEO_ID_PATTERN.fullmatch(video_id):
+            return None, "video_ids must be 11-character YouTube video IDs."
+
+    return list(dict.fromkeys(video_ids)), None
+
+
 def normalize_settings(
     payload: object, current: dict[str, int | str]
 ) -> tuple[dict[str, int | str] | None, str | None]:
@@ -207,6 +229,17 @@ def create_app(config: dict | None = None) -> Flask:
 
     def data_path(filename: str) -> Path:
         return Path(app.config["DATA_DIR"]) / filename
+
+    # Reading the account's history costs a ~1.5s network round trip, and the
+    # browser may verify several videos at once, so reuse a recent read.
+    watch_history_cache = {"videos": [], "fetched_at": 0.0}
+
+    def cached_watch_history() -> list[dict]:
+        now = time.monotonic()
+        if now - watch_history_cache["fetched_at"] >= WATCH_HISTORY_CACHE_SECONDS:
+            watch_history_cache["videos"] = fetch_watch_history()
+            watch_history_cache["fetched_at"] = now
+        return watch_history_cache["videos"]
 
     @app.get("/")
     def index() -> str:
@@ -370,6 +403,38 @@ def create_app(config: dict | None = None) -> Flask:
         # Search results replace the Current feed for the same reason.
         write_video_list(data_path("feed.json"), list(videos))
         return jsonify({"query": query, "approved": len(videos)})
+
+    @app.post("/api/watch-log/verify")
+    def verify_watch_log():
+        video_ids, error = normalize_video_ids(request.get_json(silent=True))
+        if error:
+            return jsonify({"error": "invalid_video_ids", "message": error}), 400
+
+        try:
+            history = cached_watch_history()
+        except LiveWatchLogUnavailableError as error:
+            return jsonify({"error": "watch_log_not_configured", "message": str(error)}), 501
+        except ProviderRequestError as error:
+            return jsonify({"error": "watch_log_failed", "message": str(error)}), 502
+
+        history_ids = {video["video_id"] for video in history}
+        return jsonify(
+            {
+                "checked_at": time.time(),
+                "history_size": len(history_ids),
+                "results": {
+                    video_id: video_id in history_ids for video_id in video_ids
+                },
+                "recent": [
+                    {
+                        "video_id": video["video_id"],
+                        "title": video["title"],
+                        "channel_name": video["channel_name"],
+                    }
+                    for video in history[:5]
+                ],
+            }
+        )
 
     return app
 

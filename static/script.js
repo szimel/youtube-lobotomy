@@ -28,12 +28,44 @@ const elements = {
   curationPromptInput: document.querySelector("#curation-prompt"),
   restoreDefaultPromptButton: document.querySelector("#restore-default-prompt"),
   curationPromptStatus: document.querySelector("#curation-prompt-status"),
+  watchLogBanner: document.querySelector("#watch-log-banner"),
+  watchLogBannerTitle: document.querySelector("#watch-log-banner-title"),
+  watchLogBannerDetail: document.querySelector("#watch-log-banner-detail"),
+  watchLogBannerFix: document.querySelector("#watch-log-banner-fix"),
+  watchLogBannerRecheck: document.querySelector("#watch-log-banner-recheck"),
+  watchLogForm: document.querySelector("#watch-log-form"),
+  watchLogStatus: document.querySelector("#watch-log-status"),
+  watchLogDetail: document.querySelector("#watch-log-detail"),
 };
+
+const WATCH_LOG_STORAGE_KEY = "productivity-feed.watch-log";
+const YOUTUBE_HOME_URL = "https://www.youtube.com/";
+const PLAYER_PLAYING = 1;
+// A view that never left the player cannot be confirmed, but neither should a
+// freshly started video be reported as missing: YouTube needs a moment to file
+// it, and the embed needs long enough to prove the person actually watched.
+const MIN_WATCHED_SECONDS = 30;
+const LOG_GRACE_MS = 150000;
+const VERIFY_INTERVAL_MS = 60000;
+// A view can still surface late, so a missing watch is re-checked periodically
+// instead of leaving the warning up forever.
+const RECHECK_MISSING_MS = 900000;
+const MAX_REMEMBERED_WATCHES = 40;
 
 let feed = [];
 let watchLater = [];
 let trustedCreators = [];
 let settings = { refresh_candidate_limit: 30, search_candidate_limit: 30 };
+
+let youtubePlayerApi = null;
+let activePlayers = [];
+const playback = new Map();
+let watchLog = loadWatchLog();
+let verifyInFlight = false;
+let watchLogError = null;
+let lastCheckedAt = null;
+let historySize = null;
+let recentHistory = [];
 
 function isVideo(video) {
   return (
@@ -79,15 +111,21 @@ function createVideoCard(video, saved) {
 
   const player = document.createElement("div");
   player.className = "player";
-  const iframe = document.createElement("iframe");
-  iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}`;
-  iframe.title = video.title;
-  iframe.loading = "lazy";
-  iframe.referrerPolicy = "strict-origin-when-cross-origin";
-  iframe.allow =
+  const playerTarget = document.createElement("div");
+  playerTarget.className = "player-target";
+  playerTarget.dataset.videoId = video.video_id;
+  // A plain embed loads first so the video is always watchable; once the
+  // playback-observation API is ready it swaps itself in for this element.
+  const fallback = document.createElement("iframe");
+  fallback.src = `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}`;
+  fallback.title = video.title;
+  fallback.loading = "lazy";
+  fallback.referrerPolicy = "strict-origin-when-cross-origin";
+  fallback.allow =
     "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-  iframe.allowFullscreen = true;
-  player.append(iframe);
+  fallback.allowFullscreen = true;
+  playerTarget.append(fallback);
+  player.append(playerTarget);
 
   const details = document.createElement("div");
   details.className = "video-details";
@@ -120,6 +158,7 @@ function createVideoCard(video, saved) {
   actions.className = "video-actions";
   if (saved) {
     actions.append(
+      createTrustCreatorButton(video),
       createButton("Remove", "button-quiet", () =>
         removeFromWatchLater(video.video_id),
       ),
@@ -157,9 +196,11 @@ function renderList(container, videos, saved, emptyMessage) {
     fragment.append(createVideoCard(video, saved)),
   );
   container.append(fragment);
+  mountPlayers(container, validVideos);
 }
 
 function render() {
+  destroyPlayers();
   renderList(elements.feedList, feed, false, "No videos in the current feed.");
   renderList(
     elements.watchLaterList,
@@ -226,6 +267,69 @@ function renderSettings() {
   elements.refreshLimitInput.value = settings.refresh_candidate_limit;
   elements.searchLimitInput.value = settings.search_candidate_limit;
   elements.curationPromptInput.value = settings.curation_prompt;
+}
+
+function isTrustedCreator(channelName) {
+  const normalized = (channelName || "").trim().toLowerCase();
+  if (!normalized) return false;
+  return trustedCreators.some(
+    (creator) => creator.trim().toLowerCase() === normalized,
+  );
+}
+
+// Watch later is where a video has already earned a second look, so that is the
+// only list that offers a one-click shortcut to trust its creator.
+function createTrustCreatorButton(video) {
+  const channelName = (video.channel_name || "").trim();
+  const alreadyTrusted = isTrustedCreator(channelName);
+  const button = createButton(
+    alreadyTrusted ? "Trusted" : "Trust creator",
+    "button-secondary",
+    () => trustCreator(channelName, button),
+  );
+  button.dataset.trustCreator = channelName;
+  button.disabled = alreadyTrusted || !channelName;
+  if (!channelName) {
+    button.title = "This video has no channel name to trust.";
+  }
+  return button;
+}
+
+function markCreatorTrusted(channelName) {
+  const normalized = channelName.trim().toLowerCase();
+  document.querySelectorAll("[data-trust-creator]").forEach((button) => {
+    if ((button.dataset.trustCreator || "").trim().toLowerCase() === normalized) {
+      button.textContent = "Trusted";
+      button.disabled = true;
+    }
+  });
+}
+
+async function trustCreator(channelName, button) {
+  if (!channelName) return;
+  if (button) button.disabled = true;
+
+  try {
+    const result = await request("/api/trusted-creators", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: channelName }),
+    });
+    if (!result.already_trusted) {
+      trustedCreators = [...trustedCreators, result.name];
+      renderTrustedCreators();
+    }
+    markCreatorTrusted(result.name || channelName);
+    setStatus(
+      result.already_trusted
+        ? `${channelName} is already trusted`
+        : `Now trusting ${result.name || channelName}`,
+      "success",
+    );
+  } catch (error) {
+    if (button) button.disabled = false;
+    setStatus(error.message, "error");
+  }
 }
 
 async function addTrustedCreator(event) {
@@ -492,6 +596,289 @@ async function searchFeed(event) {
   }
 }
 
+function loadYouTubePlayerApi() {
+  if (youtubePlayerApi) return youtubePlayerApi;
+
+  youtubePlayerApi = new Promise((resolve, reject) => {
+    if (window.YT && window.YT.Player) {
+      resolve(window.YT);
+      return;
+    }
+
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previous === "function") previous();
+      resolve(window.YT);
+    };
+
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.async = true;
+    script.addEventListener("error", () =>
+      reject(new Error("The YouTube player API could not be loaded.")),
+    );
+    document.head.append(script);
+  });
+
+  return youtubePlayerApi;
+}
+
+// The API only observes the player the user already drives with its own play
+// button; nothing here starts playback programmatically, because a view that
+// the page initiates itself does not register with YouTube.
+function mountPlayers(container, videos) {
+  const targets = container.querySelectorAll("[data-video-id]");
+  if (!targets.length) return;
+
+  const videosById = new Map(videos.map((video) => [video.video_id, video]));
+  loadYouTubePlayerApi()
+    .then((YT) => {
+      targets.forEach((target) => {
+        const video = videosById.get(target.dataset.videoId);
+        if (!video || target.isConnected === false) return;
+        const player = new YT.Player(target, {
+          videoId: video.video_id,
+          playerVars: { rel: 0, playsinline: 1 },
+          events: {
+            onStateChange: (event) => handlePlayerState(video, event),
+          },
+        });
+        activePlayers.push(player);
+      });
+    })
+    .catch(() => {
+      // The plain embed already in the page keeps working without observation.
+    });
+}
+
+function destroyPlayers() {
+  flushPlayback();
+  activePlayers.forEach((player) => {
+    try {
+      player.destroy();
+    } catch (error) {
+      // The element may already be detached; nothing to clean up.
+    }
+  });
+  activePlayers = [];
+  playback.clear();
+}
+
+function handlePlayerState(video, event) {
+  const state = playback.get(video.video_id) || { startedAt: null };
+  const now = Date.now();
+
+  if (event.data === PLAYER_PLAYING) {
+    if (state.startedAt === null) {
+      state.startedAt = now;
+      rememberWatch(video);
+    }
+  } else if (state.startedAt !== null) {
+    recordWatchSeconds(video.video_id, (now - state.startedAt) / 1000);
+    state.startedAt = null;
+  }
+
+  playback.set(video.video_id, state);
+  renderWatchLogStatus();
+}
+
+function flushPlayback() {
+  const now = Date.now();
+  playback.forEach((state, videoId) => {
+    if (state.startedAt === null) return;
+    recordWatchSeconds(videoId, (now - state.startedAt) / 1000);
+    state.startedAt = now;
+  });
+}
+
+function loadWatchLog() {
+  try {
+    const raw = window.localStorage.getItem(WATCH_LOG_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (entry) =>
+        entry &&
+        typeof entry.video_id === "string" &&
+        VIDEO_ID_PATTERN.test(entry.video_id),
+    );
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveWatchLog() {
+  try {
+    window.localStorage.setItem(WATCH_LOG_STORAGE_KEY, JSON.stringify(watchLog));
+  } catch (error) {
+    // Without storage, verification just cannot span page reloads.
+  }
+}
+
+function rememberWatch(video) {
+  const existing = watchLog.find((entry) => entry.video_id === video.video_id);
+  if (existing) {
+    existing.title = video.title;
+    existing.last_played_at = Date.now();
+    existing.logged = null;
+    existing.verified_at = null;
+  } else {
+    watchLog.unshift({
+      video_id: video.video_id,
+      title: video.title,
+      seconds: 0,
+      last_played_at: Date.now(),
+      logged: null,
+      verified_at: null,
+    });
+  }
+
+  if (watchLog.length > MAX_REMEMBERED_WATCHES) {
+    watchLog.length = MAX_REMEMBERED_WATCHES;
+  }
+  saveWatchLog();
+  renderWatchLogStatus();
+}
+
+function recordWatchSeconds(videoId, seconds) {
+  const entry = watchLog.find((item) => item.video_id === videoId);
+  if (!entry || !(seconds > 0)) return;
+  entry.seconds = Math.round((entry.seconds + seconds) * 10) / 10;
+  entry.last_played_at = Date.now();
+  saveWatchLog();
+}
+
+async function verifyWatchLogging({ force = false } = {}) {
+  if (verifyInFlight) return;
+
+  const now = Date.now();
+  const candidates = watchLog.filter((entry) => {
+    if (entry.seconds < MIN_WATCHED_SECONDS) return false;
+    if (!force && now - entry.last_played_at < LOG_GRACE_MS) return false;
+    if (force) return true;
+    if (entry.logged === null) return true;
+    if (entry.logged === false) {
+      return !entry.verified_at || now - entry.verified_at >= RECHECK_MISSING_MS;
+    }
+    return false;
+  });
+
+  if (!candidates.length) {
+    renderWatchLogStatus();
+    return;
+  }
+
+  verifyInFlight = true;
+  setStatus("Checking YouTube logging...", "neutral", elements.watchLogStatus);
+  try {
+    const result = await request("/api/watch-log/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        video_ids: candidates.map((entry) => entry.video_id).slice(0, 50),
+      }),
+    });
+
+    candidates.forEach((entry) => {
+      if (Object.prototype.hasOwnProperty.call(result.results, entry.video_id)) {
+        entry.logged = Boolean(result.results[entry.video_id]);
+        entry.verified_at = Date.now();
+      }
+    });
+
+    watchLogError = null;
+    lastCheckedAt = Date.now();
+    historySize = result.history_size;
+    recentHistory = Array.isArray(result.recent) ? result.recent : [];
+    saveWatchLog();
+
+    const missing = watchLog.filter((entry) => entry.logged === false).length;
+    setStatus(
+      missing
+        ? `${missing} watch(es) missing from YouTube`
+        : "Every watch reached YouTube",
+      missing ? "error" : "success",
+      elements.watchLogStatus,
+    );
+  } catch (error) {
+    watchLogError = error.message;
+    setStatus(error.message, "error", elements.watchLogStatus);
+  } finally {
+    verifyInFlight = false;
+    renderWatchLogStatus();
+  }
+}
+
+function renderWatchLogStatus() {
+  const missing = watchLog.filter((entry) => entry.logged === false);
+  const logged = watchLog.filter((entry) => entry.logged === true);
+  const pending = watchLog.filter(
+    (entry) => entry.logged === null && entry.seconds >= MIN_WATCHED_SECONDS,
+  );
+
+  if (missing.length) {
+    const named = missing
+      .slice(0, 3)
+      .map((entry) => `“${entry.title}”`)
+      .join(", ");
+    elements.watchLogBanner.hidden = false;
+    elements.watchLogBannerTitle.textContent =
+      "Your watches aren't reaching YouTube";
+    elements.watchLogBannerDetail.textContent =
+      `${missing.length} video${missing.length === 1 ? "" : "s"} you watched here ` +
+      `never appeared in your YouTube history` +
+      (named ? ` (${named})` : "") +
+      `, so ${missing.length === 1 ? "it" : "they"} never reached your ` +
+      "recommendations. The embedded player has most likely lost your sign-in — " +
+      "open YouTube, make sure you are still signed in, then watch the next " +
+      "video here.";
+  } else if (watchLogError) {
+    elements.watchLogBanner.hidden = false;
+    elements.watchLogBannerTitle.textContent =
+      "YouTube logging can't be verified";
+    elements.watchLogBannerDetail.textContent = watchLogError;
+  } else {
+    elements.watchLogBanner.hidden = true;
+  }
+
+  elements.watchLogDetail.replaceChildren();
+  const summary = document.createElement("p");
+  summary.textContent =
+    `Watched here: ${watchLog.length} · confirmed logged: ${logged.length} · ` +
+    `missing: ${missing.length} · still settling: ${pending.length}`;
+  if (missing.length) summary.className = "is-missing";
+  elements.watchLogDetail.append(summary);
+
+  const lines = [];
+  if (historySize !== null) {
+    lines.push(`History window read back: ${historySize} videos`);
+  }
+  if (lastCheckedAt) {
+    lines.push(`Last checked: ${new Date(lastCheckedAt).toLocaleTimeString()}`);
+  }
+  if (recentHistory.length) {
+    const newest = recentHistory[0];
+    lines.push(
+      `Newest video in your history: ${newest.title} — ` +
+        `${newest.channel_name || "unknown channel"}`,
+    );
+  }
+  lines.forEach((text) => {
+    const line = document.createElement("p");
+    line.textContent = text;
+    elements.watchLogDetail.append(line);
+  });
+}
+
+function openYouTubeToFix() {
+  window.open(YOUTUBE_HOME_URL, "_blank", "noopener");
+  setStatus(
+    "Sign in on YouTube if prompted, then check again.",
+    "neutral",
+    elements.watchLogStatus,
+  );
+}
+
 elements.refreshButton.addEventListener("click", refreshFeed);
 elements.searchForm.addEventListener("submit", searchFeed);
 elements.trustedCreatorForm.addEventListener("submit", addTrustedCreator);
@@ -502,8 +889,25 @@ elements.testVideoForm.addEventListener("submit", submitTestVideo);
 elements.candidateLimitsForm.addEventListener("submit", saveCandidateLimits);
 elements.curationPromptForm.addEventListener("submit", saveCurationPrompt);
 elements.restoreDefaultPromptButton.addEventListener("click", restoreDefaultCurationPrompt);
+elements.watchLogForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  verifyWatchLogging({ force: true });
+});
+elements.watchLogBannerRecheck.addEventListener("click", () =>
+  verifyWatchLogging({ force: true }),
+);
+elements.watchLogBannerFix.addEventListener("click", openYouTubeToFix);
+
+setInterval(() => {
+  flushPlayback();
+  verifyWatchLogging();
+}, VERIFY_INTERVAL_MS);
 
 loadCollections().then(
-  () => setStatus("Ready"),
+  () => {
+    setStatus("Ready");
+    renderWatchLogStatus();
+    verifyWatchLogging();
+  },
   (error) => setStatus(error.message, "error"),
 );

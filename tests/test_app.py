@@ -4,11 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app import create_app
+from app import MAX_WATCH_LOG_IDS, create_app
 from fetcher import (
     LiveFeedUnavailableError,
     LiveSearchUnavailableError,
     LiveTestUnavailableError,
+    LiveWatchLogUnavailableError,
     ProviderRequestError,
 )
 
@@ -241,6 +242,98 @@ class ApiTestCase(unittest.TestCase):
             30,
             self.client.get("/api/settings").get_json()["curation_prompt"],
         )
+
+    def test_watch_log_verify_reports_which_watches_reached_youtube(self):
+        history = [
+            {"video_id": "aaaaaaaaaaa", "title": "Logged one", "channel_name": "C1"},
+            {"video_id": "bbbbbbbbbbb", "title": "Logged two", "channel_name": "C2"},
+        ]
+
+        with patch("app.fetch_watch_history", return_value=history) as fetch:
+            response = self.client.post(
+                "/api/watch-log/verify",
+                json={"video_ids": ["aaaaaaaaaaa", "ccccccccccc"]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(
+            payload["results"], {"aaaaaaaaaaa": True, "ccccccccccc": False}
+        )
+        self.assertEqual(payload["history_size"], 2)
+        self.assertEqual(payload["recent"][0]["video_id"], "aaaaaaaaaaa")
+        self.assertIsInstance(payload["checked_at"], float)
+        fetch.assert_called_once_with()
+
+    def test_watch_log_verify_reuses_a_recent_history_read(self):
+        with patch("app.fetch_watch_history", return_value=[]) as fetch:
+            self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["aaaaaaaaaaa"]}
+            )
+            self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["bbbbbbbbbbb"]}
+            )
+
+        fetch.assert_called_once_with()
+
+    def test_watch_log_verify_rejects_bad_video_ids(self):
+        payloads = (
+            {},
+            {"video_ids": []},
+            {"video_ids": "aaaaaaaaaaa"},
+            {"video_ids": ["too-short"]},
+            {"video_ids": [12345678901]},
+        )
+
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post("/api/watch-log/verify", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"], "invalid_video_ids")
+
+    def test_watch_log_verify_rejects_too_many_video_ids(self):
+        video_ids = [f"{index:011d}" for index in range(MAX_WATCH_LOG_IDS + 1)]
+
+        response = self.client.post("/api/watch-log/verify", json={"video_ids": video_ids})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "invalid_video_ids")
+
+    def test_watch_log_verify_returns_a_configuration_failure(self):
+        with patch(
+            "app.fetch_watch_history",
+            side_effect=LiveWatchLogUnavailableError("No cookies.txt."),
+        ):
+            response = self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["aaaaaaaaaaa"]}
+            )
+
+        self.assertEqual(response.status_code, 501)
+        self.assertEqual(response.get_json()["error"], "watch_log_not_configured")
+
+    def test_watch_log_verify_returns_a_provider_failure(self):
+        with patch(
+            "app.fetch_watch_history",
+            side_effect=ProviderRequestError("YouTube returned HTTP 403."),
+        ):
+            response = self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["aaaaaaaaaaa"]}
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"], "watch_log_failed")
+
+    def test_watch_log_verify_does_not_touch_the_feed(self):
+        feed_path = self.data_directory / "feed.json"
+        feed_path.parent.mkdir(parents=True, exist_ok=True)
+        feed_path.write_text(json.dumps([VIDEO]), encoding="utf-8")
+
+        with patch("app.fetch_watch_history", return_value=[]):
+            self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["aaaaaaaaaaa"]}
+            )
+
+        self.assertEqual(json.loads(feed_path.read_text(encoding="utf-8")), [VIDEO])
 
     def test_settings_start_at_defaults(self):
         settings = self.client.get("/api/settings").get_json()

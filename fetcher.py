@@ -8,6 +8,7 @@ import http.cookiejar
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -21,8 +22,10 @@ from openai import OpenAI
 
 
 MAX_CANDIDATES = 30
+MAX_HISTORY_ENTRIES = 50
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 YOUTUBE_ORIGIN = "https://www.youtube.com"
+WATCH_HISTORY_URL = f"{YOUTUBE_ORIGIN}/feed/history"
 YOUTUBE_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -134,6 +137,10 @@ class LiveSearchUnavailableError(RuntimeError):
 
 class LiveTestUnavailableError(RuntimeError):
     """Raised when the single-video curation test cannot start."""
+
+
+class LiveWatchLogUnavailableError(RuntimeError):
+    """Raised when the account's YouTube watch history cannot be read."""
 
 
 MAX_PROVIDER_ERROR_DETAIL = 300
@@ -367,6 +374,13 @@ class _WarningCollectingLogger:
         self.messages.append(message)
 
 
+# yt-dlp persists the (rotated) cookie jar back to the cookiefile when it
+# closes, which keeps the exported session fresh. Serialising yt-dlp calls
+# stops a background watch-log check and a feed refresh from writing that
+# credential file at the same time.
+_YTDLP_LOCK = threading.Lock()
+
+
 def _home_feed_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]:
     logger = _WarningCollectingLogger()
     options = {
@@ -379,7 +393,7 @@ def _home_feed_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]:
         "logger": logger,
     }
     try:
-        with yt_dlp.YoutubeDL(options) as downloader:
+        with _YTDLP_LOCK, yt_dlp.YoutubeDL(options) as downloader:
             info = downloader.extract_info(":ytrec", download=False)
     except Exception as error:
         raise ProviderRequestError("YouTube's Home feed could not be loaded.") from error
@@ -390,6 +404,68 @@ def _home_feed_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]:
             + COOKIE_REFRESH_GUIDANCE
         )
     return list((info or {}).get("entries") or [])
+
+
+def _watch_history_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]:
+    """Reads the signed-in account's watch history through yt-dlp.
+
+    The embedded player gives no signal at all when it silently drops the
+    viewer's identity, so the only dependable way to notice that a watch was
+    never recorded is to read the account's history back and check for it.
+    """
+    logger = _WarningCollectingLogger()
+    options = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "cookiefile": cookie_path,
+        "playlist_items": f"1:{limit}",
+        "logger": logger,
+    }
+    try:
+        with _YTDLP_LOCK, yt_dlp.YoutubeDL(options) as downloader:
+            info = downloader.extract_info(WATCH_HISTORY_URL, download=False)
+    except Exception as error:
+        raise ProviderRequestError("YouTube's watch history could not be loaded.") from error
+
+    if any("rotated" in message.lower() for message in logger.messages):
+        raise ProviderConfigurationError(
+            "YouTube reported the exported cookies as rotated/expired. "
+            + COOKIE_REFRESH_GUIDANCE
+        )
+    return list((info or {}).get("entries") or [])
+
+
+def fetch_watch_history(limit: int = MAX_HISTORY_ENTRIES) -> list[Video]:
+    """Returns the account's most recent watch-history entries, newest first."""
+    try:
+        cookie_path = _relative_environment_path(
+            "YOUTUBE_COOKIES_PATH", "./data/cookies.txt"
+        )
+    except ProviderConfigurationError as error:
+        raise LiveWatchLogUnavailableError(str(error)) from error
+
+    if not cookie_path.is_file():
+        raise LiveWatchLogUnavailableError(
+            "Add an exported YouTube cookies.txt file at ./data/cookies.txt so "
+            "watch logging can be verified."
+        )
+
+    try:
+        entries = _watch_history_entries(str(cookie_path), limit)
+    except ProviderConfigurationError as error:
+        raise LiveWatchLogUnavailableError(str(error)) from error
+
+    videos: list[Video] = []
+    seen_video_ids: set[str] = set()
+    for entry in entries:
+        video = _video_from_flat_entry(entry)
+        if video is None or video["video_id"] in seen_video_ids:
+            continue
+        seen_video_ids.add(video["video_id"])
+        videos.append(video)
+    return videos
 
 
 def parse_video_id(value: str) -> str | None:
