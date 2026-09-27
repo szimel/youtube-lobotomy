@@ -55,5 +55,23 @@
     "description": "Update: With the recent release of Prototype 2, I've made Prototype 1 free to access: https://ko-fi.com/grownowgames/shop\n\nI wanted to build a city that feels alive, but is made entirely from ASCII characters.\n\nThis is a small custom engine built with JavaScript and Canvas \u2014 no Unity, Unreal, 3D models, textures, or shaders. The world is a grid-based city with roads, buildings, trees, cars, and pedestrians. \n\nEvery frame, the engine raycasts from the camera to work out perspective, depth, collisions, and what should be visible, then draws it all using letters, numbers, and symbols.\n\nIn other words: it\u2019s a tiny 3D city made from blocks, viewed through a screen of ASCII characters.\n\nStill a work in progress, but I\u2019m going to keep pushing the atmosphere, detail, and interaction further.\n\n#ASCII #ASCIICity #Cyberpunk #IndieDev #GameDev #JavaScript #HTML5Canvas #Raycasting #CreativeCoding #ProceduralGeneration #CodingProject",
     "thumbnail_url": "https://i.ytimg.com/vi/3YtygAx_C6A/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAr87Vv1wJgsWJC_awnEtAo3pyAXg",
     "curation_reason": "Passed every rule: Teaches something real 0.53"
+  },
+  {
+    "video_id": "LzivS_KzffY",
+    "title": "I Built a Custom GPU-Driven Rendering Pipeline (10x Faster)",
+    "channel_name": "Incandescent Games",
+    "description": "Support PlanetSmith & Alpha Access: https://planetsmith.world/store?utm_source=Devlog25\nWishlist on Steam: https://store.steampowered.com/app/2539340/PlanetSmith/ \nJoin our Discord: https://discord.gg/eSS2pYU7Nw\n\nIn my last devlog I replaced physics meshes with a custom voxel system. That got me thinking, could I do the same for rendering? Turns out yes, and the results are wild.\n\nIn this devlog I build a custom GPU-driven rendering pipeline using indirect rendering, upload vertex data straight to the GPU with no mesh objects at all, add octree-based frustum culling that runs entirely on the graphics card, and compress our vertex format down to a fraction of its original size. End result: a 10x performance boost, planets rendered at full detail, and over a billion vertices on screen at once.",
+    "thumbnail_url": "https://i.ytimg.com/vi/LzivS_KzffY/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLDD1iBo21VkdMKn8U_CZDbMUG8qQA",
+    "curation_reason": "Passed every rule: Teaches something real 0.83",
+    "duration_seconds": 1137
+  },
+  {
+    "video_id": "3a-X6FZfl2Y",
+    "title": "Why Jailbreaking Calculators Is (Unfortunately) a Thing Now",
+    "channel_name": "Dammit Jeff",
+    "description": "Be kind to yourself this year. Go to my sponsor https://zocdoc.com/dammitjeff and find the awesome care you deserve for FREE\n\nJoin the Cemetech server!! LOTS of Calculator nerds in there :) \nhttps://discord.gg/DXnnfq9ytt\n\nArtifice Jailbreak: https://yvantt.github.io/arTIfiCE/\nCE Libraries: https://github.com/CE-Programming/libraries/releases\nThe Calculator I used in the video: https://amzn.to/44rZ2n5\nLinks to long list of Shells: https://www.cemetech.net/downloads/browse84pce/asm/shells\nLinks to bunch of Games: https://www.cemetech.net/downloads/browse/?sort=downloads_desc\nAwesome Calculator Resources: https://github.com/TI-Toolkit/awesome-ti-docs\nMyCalcs: https://my.calcs.quest/?ref=1399\nTiCalc: https://www.ticalc.org/pub/\n@TheLastMillennial 's coverage on the TI drama, REALLY great video: https://www.youtube.com/watch?v=dSkN0aMswXs\n\n0:00 - Why Jailbreaking Calculators is necessary \n5:02 - How to Jailbreak your Ti84+CE\n6:46 - Shells for your Calculator\n9:42 - Games\n13:12 - Other Calc Modding Scenes\n\n\nSupport the Channel: https://patreon.com/dammit_jeff\nJoin the Discord!: https://discord.gg/MhTNvkNY3B\nFollow me on bluesky!!: https://bsky.app/profile/dammitjeff.com\nKeep up with me on Instagram!: https://instagram.com/dammit_jeff\nAlso on twitch now!: https://twitch.tv/dammitjeff\n\nFor business inquiries reach out to me here!: \ndammit.jeff@intheblackmedia.com",
+    "thumbnail_url": "https://i.ytimg.com/vi/3a-X6FZfl2Y/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLA5a7NCk1_QkqeGMnkb-u2IYoGegw",
+    "curation_reason": "Passed every rule: Teaches something real 0.81",
+    "duration_seconds": 955
   }
 ]
