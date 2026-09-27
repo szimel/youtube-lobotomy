@@ -1,0 +1,8 @@
+# These files are read by Linux, whatever machine cloned the repository. A
+# CRLF shebang ("#!/bin/sh\r") makes the entrypoint unrunnable, and a CRLF
+# backslash continuation breaks Dockerfile line wrapping, so their endings are
+# pinned rather than left to the cloner's core.autocrlf setting.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
