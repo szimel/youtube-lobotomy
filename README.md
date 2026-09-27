@@ -320,7 +320,7 @@ Everything lives in `data/`, and all of it is plain JSON you can read or delete.
 ## Development
 
 ```powershell
-.venv\Scripts\python.exe -m unittest discover   # 150 tests
+.venv\Scripts\python.exe -m unittest discover   # 151 tests
 node --check static/script.js
 ```
 
@@ -328,6 +328,25 @@ The tests cover the rule plumbing, the API, and the page/script contract
 (`tests/test_frontend.py` fails if the script selects an element the template no
 longer defines). Background jobs are exercised through `/api/progress`, and no
 test talks to the network.
+
+### The clock CI runs on
+
+`time.monotonic()` counts from boot, so it reads 855302 seconds on a machine
+that has been up for ten days and about 40 on a fresh runner. Any code that
+compares a clock reading against a *constant* — "has this cache expired?", "has
+the quiet window passed?" — therefore behaves differently in the two places.
+
+That difference is invisible locally, so there is a second run of the same suite
+with the clock shifted to look like a fresh boot:
+
+```powershell
+.venv\Scripts\python.exe tests\run_as_freshly_booted.py
+```
+
+CI runs both. It is what caught the watch-history cache treating its `0.0`
+"never read" marker as a read that happened at boot, which made the watch-log
+check report that nothing had reached YouTube on any machine in its first 45
+seconds of uptime.
 
 ### Measuring the footprint
 

@@ -817,6 +817,31 @@ class ApiTestCase(unittest.TestCase):
 
         fetch.assert_called_once_with()
 
+    def test_watch_log_verify_reads_the_history_on_a_freshly_booted_machine(self):
+        # The clock counts from boot, so on a server or container that restarted
+        # moments ago it is smaller than the cache window. A cache that was never
+        # read must not pass for a recent one -- otherwise the check answers
+        # "none of these watches reached YouTube" without reading anything.
+        history = [
+            {"video_id": "aaaaaaaaaaa", "title": "Logged one", "channel_name": "C1"}
+        ]
+
+        with patch("app.fetch_watch_history", return_value=history) as fetch, patch(
+            "app.time.monotonic", return_value=1.0
+        ):
+            first = self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["aaaaaaaaaaa"]}
+            )
+            second = self.client.post(
+                "/api/watch-log/verify", json={"video_ids": ["bbbbbbbbbbb"]}
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.get_json()["results"], {"aaaaaaaaaaa": True})
+        # The read is still reused rather than repeated for every video.
+        self.assertEqual(second.get_json()["results"], {"bbbbbbbbbbb": False})
+        fetch.assert_called_once_with()
+
     def test_watch_log_verify_rejects_bad_video_ids(self):
         payloads = (
             {},

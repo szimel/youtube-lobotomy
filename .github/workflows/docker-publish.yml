@@ -31,6 +31,13 @@ jobs:
       - name: Run the test suite
         run: python -m unittest discover
 
+      # A runner is minutes old, so time.monotonic() is small there and large on
+      # a developer's machine. This runs the same suite with the clock shifted to
+      # look like a fresh boot, which is the difference that made a push fail
+      # while every test passed locally.
+      - name: Run the test suite on a freshly booted clock
+        run: python tests/run_as_freshly_booted.py
+
       - name: Check the page script parses
         run: node --check static/script.js
 

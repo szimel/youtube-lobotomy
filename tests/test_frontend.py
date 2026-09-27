@@ -96,8 +96,12 @@ class FrontendTestCase(unittest.TestCase):
         )
 
     def test_assets_are_served(self):
-        self.assertEqual(self.client.get("/static/script.js").status_code, 200)
-        self.assertEqual(self.client.get("/static/style.css").status_code, 200)
+        for path in ("/static/script.js", "/static/style.css"):
+            response = self.client.get(path)
+            # Leaving it to the garbage collector makes the suite print
+            # ResourceWarnings about the file the response is still holding open.
+            response.close()
+            self.assertEqual(response.status_code, 200, path)
 
     def test_the_template_does_not_repeat_an_id(self):
         template_ids = ID_ATTRIBUTE.findall(TEMPLATE.read_text(encoding="utf-8"))

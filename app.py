@@ -752,11 +752,18 @@ def create_app(config: dict | None = None) -> Flask:
 
     # Reading the account's history costs a ~1.5s network round trip, and the
     # browser may verify several videos at once, so reuse a recent read.
-    watch_history_cache = {"videos": [], "fetched_at": 0.0}
+    #
+    # "Never read" is None, not 0.0: the clock here counts from boot, so a 0.0
+    # timestamp subtracts to less than the window on any machine or container in
+    # its first WATCH_HISTORY_CACHE_SECONDS of uptime, and an empty cache would
+    # pass for a fresh one -- reporting that no watch reached YouTube without
+    # ever reading the history.
+    watch_history_cache: dict = {"videos": [], "fetched_at": None}
 
     def cached_watch_history() -> list[dict]:
         now = time.monotonic()
-        if now - watch_history_cache["fetched_at"] >= WATCH_HISTORY_CACHE_SECONDS:
+        fetched_at = watch_history_cache["fetched_at"]
+        if fetched_at is None or now - fetched_at >= WATCH_HISTORY_CACHE_SECONDS:
             watch_history_cache["videos"] = fetch_watch_history()
             watch_history_cache["fetched_at"] = now
         return watch_history_cache["videos"]
