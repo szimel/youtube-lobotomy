@@ -9,6 +9,15 @@ concurrency instead, which is what the local `flask run` server does too.
 
 Every other setting is the command-line equivalent, so overriding any of it is
 just `docker run ... gunicorn --workers 2 app:app`.
+
+Worth knowing before replacing gunicorn to save memory: the arbiter costs about
+20 MB of private memory, which is a third of what an idle container uses, and
+serving the same app with a single-process server (waitress measures at 27 MB
+against 42 MB) looks like a straight win. It is not, because the arbiter is also
+what makes the idle restart possible -- app.IDLE_RESTART_SECONDS lets a finished
+worker exit so the kernel gets back the ~110 MB of allocator arenas a refresh
+leaves behind, and only a supervisor can start its replacement. Without one the
+container would idle at 110 MB instead of 43 MB to save 15.
 """
 
 import os
