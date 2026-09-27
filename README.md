@@ -170,6 +170,46 @@ tag. Two things to know:
 - With no registry at all, `docker save youtube-lobotomy:dev | ssh server
   'docker load'` also works.
 
+### What it costs to leave running
+
+The container is built to sit idle for weeks and use as little as possible while
+it does. Measured on the image, idle and after one real refresh:
+
+| | idle | after a refresh, idle again | idle CPU |
+| --- | --- | --- | --- |
+| before | 50 MB | 171 MB | 5.8 millicores |
+| now | 42 MB | 43 MB | 0.8 millicores |
+
+Four things get it there, and each one is a single setting or a small change:
+
+- **The health check is bash, not Python.** `docker/healthcheck.sh` opens a
+  socket with bash's `/dev/tcp` and asks for `/healthz`. The obvious
+  `python -c "import urllib.request..."` version cost 5.8 millicores — twenty
+  times what the server itself used — because every run started an interpreter
+  and imported urllib. Doing it in bash costs 0.8, including the check itself.
+- **`MALLOC_ARENA_MAX=2` and the two `MALLOC_*_THRESHOLD_` values** in the
+  Dockerfile. A refresh parses tens of megabytes of JSON and transcripts across
+  eight threads; glibc gives each thread its own arena and never returns a
+  secondary arena's freed pages, so the process sat on ~120 MB it would not
+  touch again until the next refresh. Capping the arenas and having large blocks
+  mapped and trimmed directly is most of the difference between 171 MB and
+  110 MB.
+- **yt-dlp is imported on first use**, not at startup (`fetcher._yt_dlp()`).
+  It is about 9 MB resident, and every path that needs it is a network call
+  that takes far longer than the import. That is most of 50 MB → 42 MB.
+- **`IDLE_RESTART_SECONDS=600`**: ten minutes after a run finishes, and only if
+  nobody has asked for anything since, the worker exits and gunicorn forks a
+  fresh one. That is what returns the last 110 MB → 43 MB, because Python's
+  allocator will not give the arenas back to the kernel on its own, and the
+  state that matters — feed, rulebook, transcript cache, history — is all on
+  disk. A page load, a poll, or another refresh pushes the deadline out, so it
+  never restarts underneath you. Set it to `0` to turn it off; it is off by
+  default anywhere else, because without a supervisor to start a replacement
+  (`flask run`, `run.ps1`) exiting would just stop the server.
+
+None of it changes what the app does. If you would rather keep the process warm
+at 110 MB, delete the `IDLE_RESTART_SECONDS` line and it will never restart.
+
 ### Reaching it over Tailscale
 
 A container port published as `8087:8080` is reachable on the LAN and over
@@ -280,7 +320,7 @@ Everything lives in `data/`, and all of it is plain JSON you can read or delete.
 ## Development
 
 ```powershell
-.venv\Scripts\python.exe -m unittest discover   # 142 tests
+.venv\Scripts\python.exe -m unittest discover   # 150 tests
 node --check static/script.js
 ```
 
@@ -288,6 +328,28 @@ The tests cover the rule plumbing, the API, and the page/script contract
 (`tests/test_frontend.py` fails if the script selects an element the template no
 longer defines). Background jobs are exercised through `/api/progress`, and no
 test talks to the network.
+
+### Measuring the footprint
+
+The numbers in *What it costs to leave running* came from watching a real
+container, not from estimating: `docker stats` was not accurate enough to tell a
+0.25-millicore idle server from a 5.8-millicore health check, so the readings are
+the container's own `cpu.stat` and `memory.stat`, plus `/proc/<pid>/status` for a
+per-process split. The three questions worth asking of any change here are:
+
+```bash
+# what is resident, and by which process
+docker exec <container> sh -c 'cat /sys/fs/cgroup/memory.stat | head'
+# what is actually burning CPU, over a window with nothing else running
+docker exec <container> cat /sys/fs/cgroup/cpu.stat   # before and after a sleep
+# where a worker's memory went, when the totals do not add up
+docker exec -u 1000 <container> cat /proc/<worker>/smaps_rollup
+```
+
+`malloc_trim(0)` and `mallinfo2()` (both called through `ctypes` from a scratch
+script) are what separated "the pipeline still holds this" from "the allocator
+will not give it back" — the second is the one an idle server has to be designed
+around, and it is why the idle restart exists rather than a bigger cache limit.
 
 Long operations — refresh, search, a rule preview that needs new questions — run
 in a worker thread and report progress through `GET /api/progress`, which is why

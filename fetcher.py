@@ -19,7 +19,35 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, NotRequired, Sequence, TypedDict
 
-import yt_dlp
+
+_yt_dlp_module: Any = None
+_yt_dlp_import_lock = threading.Lock()
+
+
+def _yt_dlp() -> Any:
+    """Imports yt-dlp the first time something actually needs it.
+
+    Importing it costs about 10 MB of resident memory, and every code path that
+    uses it is a network call that takes far longer than the import. An idle
+    server should not be holding it: this runs for weeks between refreshes, so
+    the import is paid once, on the first fetch, and never again.
+    """
+    global _yt_dlp_module
+    if _yt_dlp_module is None:
+        with _yt_dlp_import_lock:
+            if _yt_dlp_module is None:
+                import yt_dlp
+
+                _yt_dlp_module = yt_dlp
+    return _yt_dlp_module
+
+
+def __getattr__(name: str) -> Any:
+    # Keeps `fetcher.yt_dlp` working for anything that reaches for it by name
+    # (the tests patch `fetcher.yt_dlp.YoutubeDL`) without importing it here.
+    if name == "yt_dlp":
+        return _yt_dlp()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 MAX_CANDIDATES = 20
@@ -622,7 +650,7 @@ def _home_feed_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]:
         "logger": logger,
     }
     try:
-        with _YTDLP_LOCK, yt_dlp.YoutubeDL(options) as downloader:
+        with _YTDLP_LOCK, _yt_dlp().YoutubeDL(options) as downloader:
             info = downloader.extract_info(":ytrec", download=False)
     except Exception as error:
         raise _session_or_request_error(
@@ -657,7 +685,7 @@ def _watch_history_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]
         "logger": logger,
     }
     try:
-        with _YTDLP_LOCK, yt_dlp.YoutubeDL(options) as downloader:
+        with _YTDLP_LOCK, _yt_dlp().YoutubeDL(options) as downloader:
             info = downloader.extract_info(WATCH_HISTORY_URL, download=False)
     except Exception as error:
         raise _session_or_request_error(
@@ -891,7 +919,7 @@ def fetch_video_context(video_id: str) -> dict[str, Any]:
         # Deliberately not holding _YTDLP_LOCK: these calls carry no cookiefile,
         # so there is no credential file for them to race over, and holding it
         # would serialise the whole transcript pass.
-        with yt_dlp.YoutubeDL(_anonymous_ytdlp_options()) as downloader:
+        with _yt_dlp().YoutubeDL(_anonymous_ytdlp_options()) as downloader:
             info = downloader.extract_info(
                 WATCH_URL_TEMPLATE.format(video_id=video_id), download=False
             )

@@ -1,7 +1,9 @@
 import copy
 import json
+import logging
 import os
 import re
+import signal
 import tempfile
 import threading
 import time
@@ -49,11 +51,52 @@ MAX_JEV_INSTRUCTION_LENGTH = 1_000
 MAX_JEV_PROFILE_LENGTH = 2_000
 MAX_JEV_LEVEL_LENGTH = 300
 MAX_TRANSCRIPT_TOKENS = fetcher.JEV_TRANSCRIPT_TOKEN_CEILING
+# A refresh parses tens of megabytes of JSON and transcripts across eight
+# threads, and neither glibc nor CPython gives all of that back: after one run
+# the process holds roughly 110 MB, most of it arenas it will not touch again
+# until the next refresh, which may be days away. Only a new process returns it,
+# so the worker asks to be replaced once it has been quiet for a while.
+#
+# Off by default: exiting only makes sense under something that starts a
+# replacement (gunicorn in the container, which sets this to ten minutes). Run
+# without a supervisor -- `flask run`, run.ps1 -- and the server would simply
+# stop.
+IDLE_RESTART_SECONDS = float(os.environ.get("IDLE_RESTART_SECONDS", "0"))
+IDLE_RESTART_POLL_SECONDS = float(os.environ.get("IDLE_RESTART_POLL_SECONDS", "30"))
 DEFAULT_SETTINGS = {
     "refresh_candidate_limit": fetcher.MAX_CANDIDATES,
     "search_candidate_limit": fetcher.MAX_CANDIDATES,
     "jev": copy.deepcopy(fetcher.DEFAULT_JEV_CONFIG),
 }
+
+
+def resident_megabytes() -> float | None:
+    """Resident memory of this process, or None where /proc is not available."""
+    try:
+        with open("/proc/self/statm", encoding="ascii") as handle:
+            pages = int(handle.read().split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return pages * os.sysconf("SC_PAGE_SIZE") / 1024 / 1024
+
+
+def should_restart_when_idle(
+    now: float, last_request_at: float, job_running: bool, quiet_seconds: float
+) -> bool:
+    """Whether the app has been quiet long enough to hand its memory back."""
+    if quiet_seconds <= 0 or job_running:
+        return False
+    return now - last_request_at >= quiet_seconds
+
+
+def request_worker_restart() -> None:
+    """Asks the supervisor to replace this process.
+
+    Under gunicorn the worker treats SIGTERM as "finish and exit", and the
+    master forks a fresh worker in under a second. This is a separate function
+    so that a test can replace the action rather than the signal.
+    """
+    os.kill(os.getpid(), signal.SIGTERM)
 
 
 def read_video_list(path: Path) -> list[dict]:
@@ -682,6 +725,9 @@ def settings_response(settings: dict) -> dict:
 def create_app(config: dict | None = None) -> Flask:
     load_dotenv()
     app = Flask(__name__)
+    # Flask leaves this logger at WARNING, which silently swallows the one line
+    # worth having in `docker logs`: why the worker restarted.
+    app.logger.setLevel(logging.INFO)
     # Static files are re-read from disk on every request, but templates are
     # cached unless this is on -- which makes editing the page look like it did
     # nothing until the server is restarted.
@@ -723,15 +769,62 @@ def create_app(config: dict | None = None) -> Flask:
     job_state: dict = {"job": None}
 
     def update_job(job_id: str, **changes) -> None:
+        finished = False
         with job_lock:
             job = job_state["job"]
             if job is not None and job["id"] == job_id:
                 job.update(changes)
+                finished = changes.get("state") in {"done", "error"}
+        if finished:
+            start_idle_watch()
 
     def current_job() -> dict | None:
         with job_lock:
             job = job_state["job"]
             return dict(job) if job else None
+
+    # When the app last did anything, and whether a watcher is already waiting.
+    idle_state: dict = {"last_request_at": time.monotonic(), "watching": False}
+    idle_lock = threading.Lock()
+
+    def start_idle_watch() -> None:
+        """Asks gunicorn for a fresh worker once this one has gone quiet.
+
+        Called when a job finishes, which is the moment the process is at its
+        largest. Whatever happens next -- another refresh, a page load -- pushes
+        the deadline out, so an app that is being used is never restarted
+        underneath its user.
+        """
+        if IDLE_RESTART_SECONDS <= 0:
+            return
+
+        with idle_lock:
+            if idle_state["watching"]:
+                return
+            idle_state["watching"] = True
+
+        def watch() -> None:
+            while True:
+                time.sleep(IDLE_RESTART_POLL_SECONDS)
+                job = current_job()
+                if not should_restart_when_idle(
+                    time.monotonic(),
+                    idle_state["last_request_at"],
+                    bool(job and job["state"] == "running"),
+                    IDLE_RESTART_SECONDS,
+                ):
+                    continue
+                app.logger.info(
+                    "Idle for %d minutes: restarting to release %.0f MB",
+                    IDLE_RESTART_SECONDS // 60,
+                    resident_megabytes() or 0,
+                )
+                # gunicorn's worker handles this by finishing what it is doing
+                # and exiting cleanly; the master forks a replacement.
+                request_worker_restart()
+                return
+
+        threading.Thread(target=watch, name="idle-restart", daemon=True).start()
 
     def fail_job(job_id: str, code: str, message: str) -> None:
         update_job(
@@ -882,6 +975,12 @@ def create_app(config: dict | None = None) -> Flask:
             fail_job(job_id, "search_failed", str(error))
         except Exception as error:  # surfaced to the browser rather than swallowed
             fail_job(job_id, "search_failed", f"{type(error).__name__}: {error}")
+
+    @app.before_request
+    def note_activity():
+        # Anything the browser asks for counts, including a page load, so the
+        # idle watcher never restarts the worker while someone is using it.
+        idle_state["last_request_at"] = time.monotonic()
 
     @app.before_request
     def block_cross_site_writes():

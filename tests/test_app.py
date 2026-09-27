@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import ANY, patch
 
-from app import MAX_WATCH_LOG_IDS, create_app
+from app import MAX_WATCH_LOG_IDS, create_app, should_restart_when_idle
 from fetcher import (
     CandidateRecord,
     CurateResult,
@@ -1101,6 +1101,71 @@ class ApiTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 501)
         self.assertEqual(response.get_json()["error"], "video_test_not_configured")
+
+
+class IdleRestartTestCase(unittest.TestCase):
+    """A finished refresh leaves the worker holding memory only a new process
+    can give back, so it asks to be replaced -- but never while it is in use."""
+
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.app = create_app(
+            {"TESTING": True, "DATA_DIR": Path(self.temporary_directory.name)}
+        )
+        self.client = self.app.test_client()
+
+    def tearDown(self):
+        self.temporary_directory.cleanup()
+
+    def test_the_quiet_window_has_to_pass_completely(self):
+        self.assertFalse(should_restart_when_idle(105.0, 100.0, False, 10.0))
+        self.assertTrue(should_restart_when_idle(110.0, 100.0, False, 10.0))
+
+    def test_a_running_job_is_never_interrupted(self):
+        self.assertFalse(should_restart_when_idle(1_000.0, 0.0, True, 10.0))
+
+    def test_nothing_is_restarted_unless_it_was_asked_for(self):
+        # Without a supervisor to fork a replacement -- `flask run`, run.ps1 --
+        # exiting would just stop the server, so zero has to mean "never".
+        self.assertFalse(should_restart_when_idle(1_000.0, 0.0, False, 0.0))
+
+    def run_one_job(self):
+        with patch("app.fetch_latest_feed", return_value=outcome([VIDEO])):
+            self.client.post("/api/refresh")
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline:
+                job = self.client.get("/api/progress").get_json().get("job")
+                if job and job["state"] != "running":
+                    return job
+                time.sleep(0.005)
+        self.fail("the background job never finished")
+
+    def test_a_finished_job_asks_for_a_restart_once_the_app_is_quiet(self):
+        restarted = threading.Event()
+        with patch("app.IDLE_RESTART_SECONDS", 0.05), patch(
+            "app.IDLE_RESTART_POLL_SECONDS", 0.01
+        ), patch("app.request_worker_restart", side_effect=restarted.set):
+            self.run_one_job()
+            self.assertTrue(
+                restarted.wait(10.0), "the idle watcher never asked to restart"
+            )
+
+    def test_using_the_app_postpones_the_restart(self):
+        restarted = threading.Event()
+        with patch("app.IDLE_RESTART_SECONDS", 0.4), patch(
+            "app.IDLE_RESTART_POLL_SECONDS", 0.01
+        ), patch("app.request_worker_restart", side_effect=restarted.set):
+            self.run_one_job()
+            # Keep asking for the page for longer than the quiet window: the
+            # restart is postponed for as long as anyone is actually there.
+            deadline = time.monotonic() + 1.2
+            while time.monotonic() < deadline:
+                self.client.get("/api/progress")
+                time.sleep(0.02)
+            self.assertFalse(restarted.is_set())
+            self.assertTrue(
+                restarted.wait(10.0), "the restart should happen once it is quiet"
+            )
 
 
 if __name__ == "__main__":

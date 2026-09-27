@@ -12,10 +12,22 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=8080
+    PORT=8080 \
+    IDLE_RESTART_SECONDS=600 \
+    MALLOC_ARENA_MAX=2 \
+    MALLOC_MMAP_THRESHOLD_=131072 \
+    MALLOC_TRIM_THRESHOLD_=131072
 
 # gosu drops root after the data volume has been made writable; tini forwards
 # signals and reaps the JavaScript runtime yt-dlp spawns.
+#
+# The MALLOC_* settings above are the difference between idling at 45 MB and at
+# 165 MB after a refresh. Python's worker threads each get their own allocator
+# arena, and glibc never returns a secondary arena's freed pages to the kernel,
+# so a pipeline that parses megabytes of JSON across eight threads holds tens of
+# megabytes it is no longer using. Capping the arenas at two and having large
+# blocks mapped and trimmed directly keeps that memory out of the process (see
+# "Measuring the footprint" in the README for the numbers).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -38,7 +50,7 @@ COPY templates/ ./templates/
 COPY static/ ./static/
 COPY tests/ ./tests/
 COPY docker/ ./docker/
-RUN chmod 0755 /app/docker/entrypoint.sh
+RUN chmod 0755 /app/docker/entrypoint.sh /app/docker/healthcheck.sh
 
 # Everything the app writes lives under /app/data: the feed, the rulebook, the
 # transcript cache, the run history and the exported cookies. Creating it here
@@ -50,8 +62,11 @@ RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin feed \
 VOLUME ["/app/data"]
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/healthz', timeout=4)"
+# Checked once a minute: this container is expected to sit idle for days, and
+# nothing acts on the result except a human looking at `docker ps`. The script
+# is bash rather than Python because the check outlives everything else here.
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["bash", "/app/docker/healthcheck.sh"]
 
 # The entrypoint starts as root only to fix up /app/data and then hands the
 # server to the unprivileged account, so a bind mount works without the host

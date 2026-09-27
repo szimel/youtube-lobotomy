@@ -41,6 +41,10 @@ services:
       # Only needed when something in front rewrites the Host header, which
       # would otherwise make every button return 403.
       # PUBLIC_ORIGINS: https://feed.example.com
+      # The image already sets this to 600. It is how long the app has to be
+      # idle, after a run, before the worker restarts itself to hand ~110 MB of
+      # allocator arenas back to the kernel; 0 keeps the process warm instead.
+      # IDLE_RESTART_SECONDS: 600
     volumes:
       # cookies.txt, feed.json, settings.json and the transcript cache.
       - ./data:/app/data
