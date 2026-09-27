@@ -31,6 +31,9 @@
           <button id="refresh-feed" class="button button-primary" type="button">
             Refresh feed
           </button>
+          <button id="open-jev" class="button button-secondary" type="button">
+            Curation rules
+          </button>
           <button id="open-settings" class="button button-secondary" type="button">
             Settings
           </button>
@@ -59,9 +62,41 @@
               <p class="eyebrow">Right now</p>
               <h2 id="feed-heading">Current feed</h2>
             </div>
-            <p id="feed-count" class="item-count">0 videos</p>
+            <div class="section-heading-side">
+              <label class="feed-filter">
+                <input id="hide-watched" type="checkbox">
+                Hide watched
+              </label>
+              <p id="feed-count" class="item-count">0 videos</p>
+            </div>
           </div>
           <div id="feed-list" class="video-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="feed-section" aria-labelledby="run-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Last run</p>
+              <h2 id="run-heading">What the curator did</h2>
+            </div>
+            <p id="run-stats" class="item-count"></p>
+          </div>
+          <p id="run-note" class="run-note"></p>
+          <details id="filtered-drawer" class="filtered-drawer" hidden>
+            <summary id="filtered-summary">Filtered out</summary>
+            <p class="settings-hint">
+              Every candidate the last run judged, with the rule that decided it.
+              Nothing here is in your feed.
+            </p>
+            <div id="filtered-list" class="filtered-list"></div>
+          </details>
+          <details id="history-drawer" class="filtered-drawer" hidden>
+            <summary>Recent runs</summary>
+            <p class="settings-hint">
+              What each run cost and how much of it the curator could actually see.
+            </p>
+            <div id="history-list" class="history-list"></div>
+          </details>
         </section>
 
         <section class="feed-section" aria-labelledby="watch-later-heading">
@@ -89,6 +124,7 @@
           <p class="settings-hint">
             Videos from these channels always reach the feed, even if the AI would reject them.
           </p>
+          <div id="trust-suggestions" class="trust-suggestions" hidden></div>
           <form id="trusted-creator-form" class="creator-form">
             <label class="visually-hidden" for="trusted-creator-name">Channel name</label>
             <input
@@ -145,7 +181,6 @@
               name="refresh_candidate_limit"
               type="number"
               min="1"
-              max="50"
               required
             >
             <label for="search-candidate-limit">Videos per search</label>
@@ -154,7 +189,6 @@
               name="search_candidate_limit"
               type="number"
               min="1"
-              max="50"
               required
             >
             <button class="button button-secondary" type="submit">Save</button>
@@ -163,31 +197,6 @@
         </div>
       </details>
 
-      <details class="settings-section">
-        <summary>Curation prompt</summary>
-        <div class="settings-section-body">
-          <p class="settings-hint">
-            This instruction is sent to the AI with every refresh, search, and video test.
-          </p>
-          <form id="curation-prompt-form" class="curation-prompt-form">
-            <label class="visually-hidden" for="curation-prompt">Curation prompt</label>
-            <textarea
-              id="curation-prompt"
-              name="curation_prompt"
-              rows="16"
-              maxlength="20000"
-              required
-            ></textarea>
-            <div class="curation-prompt-actions">
-              <button id="restore-default-prompt" class="button button-quiet" type="button">
-                Restore default
-              </button>
-              <button class="button button-secondary" type="submit">Save prompt</button>
-            </div>
-          </form>
-          <p id="curation-prompt-status" class="status" aria-live="polite"></p>
-        </div>
-      </details>
       <details class="settings-section">
         <summary>YouTube logging</summary>
         <div class="settings-section-body">
@@ -205,6 +214,107 @@
         </div>
       </details>
 
+    </dialog>
+
+    <dialog id="jev-dialog" class="settings-dialog jev-dialog">
+      <form method="dialog" class="settings-dialog-header">
+        <h2>Jev curation rules</h2>
+        <button class="button button-quiet" type="submit">Close</button>
+      </form>
+
+      <form id="jev-form" class="jev-form">
+        <section class="jev-section">
+          <h3>What you're looking for</h3>
+          <p class="settings-hint">
+            Background that Jev reads alongside every video. Describe the viewer and the
+            kind of material worth keeping — it colours all of the questions below.
+          </p>
+          <textarea
+            id="jev-profile"
+            class="jev-profile"
+            rows="4"
+            maxlength="2000"
+            placeholder="Who is watching, and what do they want more of?"
+          ></textarea>
+        </section>
+
+        <section class="jev-section">
+          <h3>Must be true <span id="jev-positives-count" class="jev-count"></span></h3>
+          <p class="settings-hint">
+            Every one of these has to pass before a video is allowed through. Ask for one
+            thing at a time — Jev answers exactly what you write, so keep each question literal.
+          </p>
+          <div id="jev-positives" class="jev-rules"></div>
+          <button id="jev-add-positive" class="button button-secondary" type="button">
+            Add a “must be true” rule
+          </button>
+        </section>
+
+        <section class="jev-section">
+          <h3>Red flags <span id="jev-disqualifiers-count" class="jev-count"></span></h3>
+          <p class="settings-hint">
+            If any of these turns out to be true, the video is rejected no matter what else passed.
+          </p>
+          <div id="jev-disqualifiers" class="jev-rules"></div>
+          <button id="jev-add-disqualifier" class="button button-secondary" type="button">
+            Add a red flag
+          </button>
+        </section>
+
+        <section class="jev-section">
+          <h3>Optional rating</h3>
+          <p class="settings-hint">
+            Ask Jev to place each video on a scale you define. Jev's numbers are compressed
+            — even strong videos often land in the upper-middle — so test a few videos before
+            trusting the minimum.
+          </p>
+          <label class="jev-toggle">
+            <input id="jev-rating-enabled" type="checkbox">
+            Rate every video
+          </label>
+          <label class="jev-field">
+            Question
+            <input id="jev-rating-instruction" type="text" maxlength="1000">
+          </label>
+          <label class="jev-field">
+            Levels, lowest first — one per line (2–10)
+            <textarea id="jev-rating-criteria" rows="6"></textarea>
+          </label>
+          <label class="jev-field jev-field-narrow">
+            Lowest rating to accept
+            <input id="jev-rating-minimum" type="number" step="0.5" min="0">
+          </label>
+        </section>
+
+        <section class="jev-section">
+          <h3>Transcripts</h3>
+          <p class="settings-hint">
+            Jev reads a transcript when one exists, which is what rescues good videos with
+            clickbait titles. Very short transcripts say less than the title does, so they
+            are ignored rather than fed in.
+          </p>
+          <label class="jev-field jev-field-narrow">
+            Ignore transcripts shorter than (tokens)
+            <input id="jev-transcript-min" type="number" min="0" max="20000" step="100">
+          </label>
+          <label class="jev-field jev-field-narrow">
+            Send at most (tokens)
+            <input id="jev-transcript-max" type="number" min="0" max="20000" step="500">
+          </label>
+        </section>
+
+        <div class="jev-actions">
+          <button id="jev-restore-defaults" class="button button-quiet" type="button">
+            Restore defaults
+          </button>
+          <button id="jev-preview" class="button button-secondary" type="button">
+            Preview against last run
+          </button>
+          <button class="button button-primary" type="submit">Save rules</button>
+        </div>
+        <p id="jev-status" class="status" aria-live="polite"></p>
+        <div id="jev-preview-result" class="jev-preview-result" aria-live="polite"></div>
+      </form>
     </dialog>
 
     <template id="empty-state-template">

@@ -24,10 +24,24 @@ const elements = {
   refreshLimitInput: document.querySelector("#refresh-candidate-limit"),
   searchLimitInput: document.querySelector("#search-candidate-limit"),
   feedSettingsStatus: document.querySelector("#feed-settings-status"),
-  curationPromptForm: document.querySelector("#curation-prompt-form"),
-  curationPromptInput: document.querySelector("#curation-prompt"),
-  restoreDefaultPromptButton: document.querySelector("#restore-default-prompt"),
-  curationPromptStatus: document.querySelector("#curation-prompt-status"),
+  openJevButton: document.querySelector("#open-jev"),
+  jevDialog: document.querySelector("#jev-dialog"),
+  jevForm: document.querySelector("#jev-form"),
+  jevProfile: document.querySelector("#jev-profile"),
+  jevPositives: document.querySelector("#jev-positives"),
+  jevDisqualifiers: document.querySelector("#jev-disqualifiers"),
+  jevPositivesCount: document.querySelector("#jev-positives-count"),
+  jevDisqualifiersCount: document.querySelector("#jev-disqualifiers-count"),
+  jevAddPositive: document.querySelector("#jev-add-positive"),
+  jevAddDisqualifier: document.querySelector("#jev-add-disqualifier"),
+  jevRatingEnabled: document.querySelector("#jev-rating-enabled"),
+  jevRatingInstruction: document.querySelector("#jev-rating-instruction"),
+  jevRatingCriteria: document.querySelector("#jev-rating-criteria"),
+  jevRatingMinimum: document.querySelector("#jev-rating-minimum"),
+  jevTranscriptMin: document.querySelector("#jev-transcript-min"),
+  jevTranscriptMax: document.querySelector("#jev-transcript-max"),
+  jevRestoreDefaults: document.querySelector("#jev-restore-defaults"),
+  jevStatus: document.querySelector("#jev-status"),
   watchLogBanner: document.querySelector("#watch-log-banner"),
   watchLogBannerTitle: document.querySelector("#watch-log-banner-title"),
   watchLogBannerDetail: document.querySelector("#watch-log-banner-detail"),
@@ -36,9 +50,21 @@ const elements = {
   watchLogForm: document.querySelector("#watch-log-form"),
   watchLogStatus: document.querySelector("#watch-log-status"),
   watchLogDetail: document.querySelector("#watch-log-detail"),
+  hideWatched: document.querySelector("#hide-watched"),
+  runStats: document.querySelector("#run-stats"),
+  runNote: document.querySelector("#run-note"),
+  filteredDrawer: document.querySelector("#filtered-drawer"),
+  filteredSummary: document.querySelector("#filtered-summary"),
+  filteredList: document.querySelector("#filtered-list"),
+  historyDrawer: document.querySelector("#history-drawer"),
+  historyList: document.querySelector("#history-list"),
+  trustSuggestions: document.querySelector("#trust-suggestions"),
+  jevPreviewButton: document.querySelector("#jev-preview"),
+  jevPreviewResult: document.querySelector("#jev-preview-result"),
 };
 
 const WATCH_LOG_STORAGE_KEY = "productivity-feed.watch-log";
+const HIDE_WATCHED_STORAGE_KEY = "productivity-feed.hide-watched";
 const YOUTUBE_HOME_URL = "https://www.youtube.com/";
 const PLAYER_PLAYING = 1;
 // A view that never left the player cannot be confirmed, but neither should a
@@ -51,11 +77,24 @@ const VERIFY_INTERVAL_MS = 60000;
 // instead of leaving the warning up forever.
 const RECHECK_MISSING_MS = 900000;
 const MAX_REMEMBERED_WATCHES = 40;
+// Refresh on open once the feed is older than this, so the app is already
+// showing today's videos instead of making the first visit wait.
+const STALE_FEED_MS = 6 * 60 * 60 * 1000;
 
 let feed = [];
 let watchLater = [];
 let trustedCreators = [];
-let settings = { refresh_candidate_limit: 30, search_candidate_limit: 30 };
+let watched = [];
+let lastRun = null;
+let trustSuggestions = [];
+let settings = {
+  refresh_candidate_limit: 20,
+  search_candidate_limit: 20,
+  max_candidate_limit: 20,
+  max_transcript_tokens: 20000,
+  jev: null,
+  default_jev: null,
+};
 
 let youtubePlayerApi = null;
 let activePlayers = [];
@@ -66,6 +105,11 @@ let watchLogError = null;
 let lastCheckedAt = null;
 let historySize = null;
 let recentHistory = [];
+let hideWatched = loadHideWatched();
+// Watches are reported in batches so a page with several videos playing does
+// not generate a request per pause.
+let watchReportQueue = new Map();
+let watchReportTimer = null;
 
 function isVideo(video) {
   return (
@@ -105,27 +149,70 @@ function createButton(label, className, onClick) {
   return button;
 }
 
+function formatDuration(seconds) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
+    return "";
+  }
+  const total = Math.round(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const pad = (value) => String(value).padStart(2, "0");
+  return hours
+    ? `${hours}:${pad(minutes)}:${pad(secs)}`
+    : `${minutes}:${pad(secs)}`;
+}
+
+function watchedIds() {
+  return new Set(
+    watched
+      .filter((record) => Number(record?.seconds) >= MIN_WATCHED_SECONDS)
+      .map((record) => record.video_id),
+  );
+}
+
+// A card loads no player until it is clicked: a grid of twenty iframes is slow,
+// and tearing them all down to re-render is what used to reset a video that was
+// already playing.
 function createVideoCard(video, saved) {
   const card = document.createElement("article");
   card.className = "video-card";
+  card.dataset.videoId = video.video_id;
 
   const player = document.createElement("div");
   player.className = "player";
+  const poster = document.createElement("button");
+  poster.type = "button";
+  poster.className = "player-poster";
+  poster.setAttribute("aria-label", `Play ${video.title}`);
+
+  if (typeof video.thumbnail_url === "string" && video.thumbnail_url) {
+    const image = document.createElement("img");
+    image.className = "player-thumbnail";
+    image.src = video.thumbnail_url;
+    image.alt = "";
+    image.loading = "lazy";
+    image.referrerPolicy = "strict-origin-when-cross-origin";
+    poster.append(image);
+  }
+
+  const playBadge = document.createElement("span");
+  playBadge.className = "player-play";
+  playBadge.textContent = "▶";
+  poster.append(playBadge);
+
+  const duration = formatDuration(video.duration_seconds);
+  if (duration) {
+    const durationBadge = document.createElement("span");
+    durationBadge.className = "player-duration";
+    durationBadge.textContent = duration;
+    poster.append(durationBadge);
+  }
+
   const playerTarget = document.createElement("div");
   playerTarget.className = "player-target";
-  playerTarget.dataset.videoId = video.video_id;
-  // A plain embed loads first so the video is always watchable; once the
-  // playback-observation API is ready it swaps itself in for this element.
-  const fallback = document.createElement("iframe");
-  fallback.src = `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}`;
-  fallback.title = video.title;
-  fallback.loading = "lazy";
-  fallback.referrerPolicy = "strict-origin-when-cross-origin";
-  fallback.allow =
-    "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-  fallback.allowFullscreen = true;
-  playerTarget.append(fallback);
-  player.append(playerTarget);
+  poster.addEventListener("click", () => activatePlayer(player, poster, video));
+  player.append(poster, playerTarget);
 
   const details = document.createElement("div");
   details.className = "video-details";
@@ -164,20 +251,89 @@ function createVideoCard(video, saved) {
       ),
     );
   } else {
-    const alreadySaved = watchLater.some(
-      (item) => item.video_id === video.video_id,
+    const saveButton = createButton("Watch later", "button-secondary", () =>
+      addToWatchLater(video, saveButton),
     );
-    const saveButton = createButton(
-      alreadySaved ? "Saved" : "Watch later",
-      "button-secondary",
-      () => addToWatchLater(video),
-    );
-    saveButton.disabled = alreadySaved;
+    saveButton.classList.add("save-later");
     actions.append(saveButton);
   }
 
   card.append(player, details, actions);
+  markCardWatchState(card, video);
   return card;
+}
+
+function markCardWatchState(card, video) {
+  const isWatched = watchedIds().has(video.video_id);
+  card.classList.toggle("is-watched", isWatched);
+
+  const existing = card.querySelector(".watched-chip");
+  if (existing) existing.remove();
+  if (isWatched) {
+    const chip = document.createElement("span");
+    chip.className = "watched-chip";
+    chip.textContent = "Watched";
+    card.querySelector(".video-details")?.prepend(chip);
+  }
+
+  // Only the feed's own save button changes wording; Watch later's buttons mean
+  // something else entirely.
+  const saveButton = card.querySelector(".video-actions .save-later");
+  if (saveButton instanceof HTMLButtonElement) {
+    const alreadySaved = watchLater.some(
+      (item) => item.video_id === video.video_id,
+    );
+    saveButton.textContent = isWatched
+      ? "Watched"
+      : alreadySaved
+        ? "Saved"
+        : "Watch later";
+    saveButton.disabled = isWatched || alreadySaved;
+  }
+}
+
+// Nothing here starts a video on its own: the click below is the same user
+// gesture as pressing play inside the embed, which is what YouTube counts.
+function activatePlayer(player, poster, video) {
+  if (player.classList.contains("is-playing")) return;
+  const target = player.querySelector(".player-target");
+  if (!target) return;
+  player.classList.add("is-playing");
+  poster.hidden = true;
+  target.replaceChildren();
+
+  loadYouTubePlayerApi()
+    .then((YT) => {
+      const mount = document.createElement("div");
+      target.append(mount);
+      const instance = new YT.Player(mount, {
+        videoId: video.video_id,
+        playerVars: { rel: 0, playsinline: 1, autoplay: 0 },
+        events: {
+          onReady: (event) => {
+            try {
+              event.target.playVideo();
+            } catch (error) {
+              // The embed's own play button is still there to press.
+            }
+          },
+          onStateChange: (event) => handlePlayerState(video, event),
+        },
+      });
+      activePlayers.push(instance);
+    })
+    .catch(() => {
+      // Without the API the plain embed still plays; only observation is lost.
+      const fallback = document.createElement("iframe");
+      fallback.src = `https://www.youtube.com/embed/${encodeURIComponent(
+        video.video_id,
+      )}`;
+      fallback.title = video.title;
+      fallback.allow =
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+      fallback.allowFullscreen = true;
+      target.replaceChildren(fallback);
+    });
 }
 
 function renderList(container, videos, saved, emptyMessage) {
@@ -196,19 +352,36 @@ function renderList(container, videos, saved, emptyMessage) {
     fragment.append(createVideoCard(video, saved)),
   );
   container.append(fragment);
-  mountPlayers(container, validVideos);
+}
+
+function visibleFeed() {
+  const valid = feed.filter(isVideo);
+  if (!hideWatched) return valid;
+  const seen = watchedIds();
+  return valid.filter((video) => !seen.has(video.video_id));
 }
 
 function render() {
   destroyPlayers();
-  renderList(elements.feedList, feed, false, "No videos in the current feed.");
+  const visible = visibleFeed();
+  renderList(
+    elements.feedList,
+    visible,
+    false,
+    feed.length && !visible.length
+      ? "You have watched everything in this feed. Refresh for more."
+      : "No videos in the current feed.",
+  );
   renderList(
     elements.watchLaterList,
     watchLater,
     true,
     "Nothing saved for later.",
   );
-  elements.feedCount.textContent = `${feed.filter(isVideo).length} videos`;
+  const hidden = feed.filter(isVideo).length - visible.length;
+  elements.feedCount.textContent =
+    `${visible.length} video${visible.length === 1 ? "" : "s"}` +
+    (hidden > 0 ? ` · ${hidden} watched hidden` : "");
   elements.watchLaterCount.textContent = `${watchLater.filter(isVideo).length} saved`;
 }
 
@@ -243,30 +416,252 @@ function renderTrustedCreators() {
 }
 
 async function loadCollections() {
-  const [nextFeed, nextWatchLater, nextTrustedCreators, nextSettings] =
-    await Promise.all([
-      request("/api/feed"),
-      request("/api/watch-later"),
-      request("/api/trusted-creators"),
-      request("/api/settings"),
-    ]);
+  const [
+    nextFeed,
+    nextWatchLater,
+    nextTrustedCreators,
+    nextSettings,
+    nextWatched,
+    nextRun,
+    nextSuggestions,
+    nextRuns,
+  ] = await Promise.all([
+    request("/api/feed"),
+    request("/api/watch-later"),
+    request("/api/trusted-creators"),
+    request("/api/settings"),
+    request("/api/watched"),
+    request("/api/last-run"),
+    request("/api/trust-suggestions"),
+    request("/api/runs"),
+  ]);
   feed = Array.isArray(nextFeed) ? nextFeed : [];
   watchLater = Array.isArray(nextWatchLater) ? nextWatchLater : [];
   trustedCreators = Array.isArray(nextTrustedCreators)
     ? nextTrustedCreators
     : [];
+  watched = Array.isArray(nextWatched) ? nextWatched : [];
+  lastRun = nextRun?.run && typeof nextRun.run === "object" ? nextRun.run : null;
+  trustSuggestions = Array.isArray(nextSuggestions) ? nextSuggestions : [];
   if (nextSettings && typeof nextSettings === "object") {
     settings = nextSettings;
   }
   render();
   renderTrustedCreators();
   renderSettings();
+  renderRunSummary();
+  renderRunHistory(Array.isArray(nextRuns) ? nextRuns : []);
+  renderTrustSuggestions();
+}
+
+function loadHideWatched() {
+  try {
+    return window.localStorage.getItem(HIDE_WATCHED_STORAGE_KEY) === "true";
+  } catch (error) {
+    return false;
+  }
+}
+
+function renderRunSummary() {
+  const stats = lastRun?.stats;
+  elements.filteredDrawer.hidden = true;
+  elements.filteredList.replaceChildren();
+  elements.filteredSummary.textContent = "Filtered out";
+
+  if (!stats) {
+    elements.runStats.textContent = "";
+    elements.runNote.textContent =
+      "Nothing yet — refresh the feed and this will show what the curator did with each candidate.";
+    return;
+  }
+
+  const when = lastRun.ran_at
+    ? new Date(lastRun.ran_at * 1000).toLocaleString()
+    : "unknown time";
+  const cost = Number(stats.estimated_cost_usd || 0);
+  elements.runStats.textContent =
+    `${stats.approved} kept of ${stats.candidates}`;
+  const parts = [
+    `${lastRun.kind === "search" ? "Search" : "Refresh"} at ${when}`,
+    `${stats.judged} judged`,
+  ];
+  if (stats.skipped_watched) parts.push(`${stats.skipped_watched} already watched`);
+  if (stats.with_transcript) parts.push(`${stats.with_transcript} with transcripts`);
+  if (stats.input_tokens) {
+    parts.push(`${stats.input_tokens.toLocaleString()} tokens (~$${cost.toFixed(6)})`);
+  }
+  if (stats.run_seconds) parts.push(`${stats.run_seconds}s`);
+  if (stats.model) parts.push(stats.model);
+  // A run that could not judge everything is not a strict run, and saying so is
+  // the whole point of keeping these numbers.
+  if (stats.unjudged) {
+    parts.push(`${stats.unjudged} could not be judged`);
+  }
+  elements.runNote.textContent = parts.join(" · ");
+
+  const candidates = Array.isArray(lastRun.candidates) ? lastRun.candidates : [];
+  const rejected = candidates.filter(
+    (candidate) => candidate?.decision && !candidate.decision.approved,
+  );
+  if (!candidates.length) return;
+
+  elements.filteredDrawer.hidden = false;
+  elements.filteredSummary.textContent =
+    `Judged ${candidates.length} candidates · ${rejected.length} filtered out`;
+
+  const list = document.createDocumentFragment();
+  candidates.forEach((candidate) => {
+    const video = candidate.video || {};
+    const decision = candidate.decision;
+    const item = document.createElement("article");
+    item.className = "filtered-item";
+
+    const heading = document.createElement("p");
+    heading.className = "filtered-title";
+    heading.textContent = video.title || "(untitled)";
+    item.append(heading);
+
+    const meta = document.createElement("p");
+    meta.className = "filtered-meta";
+    const bits = [];
+    if (video.channel_name) bits.push(video.channel_name);
+    if (candidate.used_transcript) {
+      bits.push(`transcript ~${candidate.transcript_tokens} tokens`);
+    } else {
+      bits.push("title only");
+    }
+    if (candidate.error) bits.push("could not be judged");
+    meta.textContent = bits.join(" · ");
+    item.append(meta);
+
+    const verdict = document.createElement("p");
+    verdict.className = `filtered-verdict ${
+      !decision ? "is-unknown" : decision.approved ? "is-approved" : "is-rejected"
+    }`;
+    verdict.textContent = decision
+      ? decision.summary
+      : `Jev did not answer for this video${candidate.error ? `: ${candidate.error}` : ""}.`;
+    item.append(verdict);
+
+    const checks = Array.isArray(decision?.checks) ? decision.checks : [];
+    if (checks.length) {
+      const checkList = document.createElement("ul");
+      checkList.className = "filtered-checks";
+      checks.forEach((check) => {
+        const value =
+          typeof check.value === "number" ? check.value.toFixed(2) : "unanswered";
+        const line = document.createElement("li");
+        line.className =
+          check.answered === false || check.passed === null
+            ? "is-unanswered"
+            : check.passed
+              ? "is-pass"
+              : "is-fail";
+        line.textContent =
+          `${check.kind === "positive" ? "must" : "flag"} · ${check.name}: ` +
+          `${value} (${check.kind === "positive" ? "needs" : "limit"} ${Number(
+            check.threshold,
+          ).toFixed(2)})`;
+        checkList.append(line);
+      });
+      item.append(checkList);
+    }
+
+    list.append(item);
+  });
+  elements.filteredList.append(list);
+}
+
+function renderRunHistory(runs) {
+  elements.historyList.replaceChildren();
+  elements.historyDrawer.hidden = !runs.length;
+  if (!runs.length) return;
+
+  runs.forEach((run) => {
+    const line = document.createElement("p");
+    line.className = "history-line";
+    const when = run.ran_at
+      ? new Date(run.ran_at * 1000).toLocaleString()
+      : "unknown time";
+    const cost = Number(run.estimated_cost_usd || 0);
+    const bits = [
+      when,
+      run.kind === "search" ? `search “${run.query || ""}”` : "refresh",
+      `${run.approved ?? 0} of ${run.candidates ?? 0} kept`,
+    ];
+    if (run.skipped_watched) bits.push(`${run.skipped_watched} already watched`);
+    if (run.with_transcript !== undefined && run.candidates) {
+      bits.push(`${run.with_transcript} with transcripts`);
+    }
+    if (run.unjudged) bits.push(`${run.unjudged} unjudged`);
+    if (run.input_tokens) {
+      bits.push(`${run.input_tokens.toLocaleString()} tok (~$${cost.toFixed(6)})`);
+    }
+    if (run.run_seconds) bits.push(`${run.run_seconds}s`);
+    line.textContent = bits.join(" · ");
+    elements.historyList.append(line);
+  });
+}
+
+function renderTrustSuggestions() {
+  elements.trustSuggestions.replaceChildren();
+  if (!trustSuggestions.length) {
+    elements.trustSuggestions.hidden = true;
+    return;
+  }
+
+  elements.trustSuggestions.hidden = false;
+  const heading = document.createElement("p");
+  heading.className = "settings-hint";
+  heading.textContent =
+    "Channels you keep choosing. Trusting one sends its videos straight to the feed.";
+  elements.trustSuggestions.append(heading);
+
+  trustSuggestions.forEach((suggestion) => {
+    const row = document.createElement("div");
+    row.className = "trust-suggestion";
+    const label = document.createElement("span");
+    label.textContent = `${suggestion.name} — ${suggestion.reason}`;
+    const addButton = createButton("Trust", "button-secondary", async () => {
+      addButton.disabled = true;
+      try {
+        await request("/api/trusted-creators", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: suggestion.name }),
+        });
+        trustedCreators = [...trustedCreators, suggestion.name];
+        trustSuggestions = trustSuggestions.filter(
+          (item) => item.name !== suggestion.name,
+        );
+        renderTrustedCreators();
+        renderTrustSuggestions();
+        setStatus(`Trusting ${suggestion.name}`, "success");
+      } catch (error) {
+        addButton.disabled = false;
+        setStatus(error.message, "error", elements.trustedCreatorsStatus);
+      }
+    });
+    row.append(label, addButton);
+    elements.trustSuggestions.append(row);
+  });
 }
 
 function renderSettings() {
   elements.refreshLimitInput.value = settings.refresh_candidate_limit;
   elements.searchLimitInput.value = settings.search_candidate_limit;
-  elements.curationPromptInput.value = settings.curation_prompt;
+  // The server owns these limits, so the form cannot invite a value it rejects.
+  const maxCandidates = Number(settings.max_candidate_limit);
+  if (Number.isFinite(maxCandidates) && maxCandidates > 0) {
+    elements.refreshLimitInput.max = String(maxCandidates);
+    elements.searchLimitInput.max = String(maxCandidates);
+  }
+  const maxTranscript = Number(settings.max_transcript_tokens);
+  if (Number.isFinite(maxTranscript) && maxTranscript > 0) {
+    elements.jevTranscriptMin.max = String(maxTranscript);
+    elements.jevTranscriptMax.max = String(maxTranscript);
+  }
+  renderJevSettings(settings.jev || settings.default_jev);
 }
 
 function isTrustedCreator(channelName) {
@@ -384,36 +779,80 @@ async function removeTrustedCreator(name) {
 
 function renderVideoTestResult(result) {
   const video = result?.video;
-  const approvedVideos = result?.llm_response?.approved_videos;
-  const approval = Array.isArray(approvedVideos)
-    ? approvedVideos.find((item) => item?.id === video?.video_id)
-    : undefined;
+  const decision = result?.decision;
+  const approved = Boolean(decision?.approved);
 
   elements.testVideoResult.replaceChildren();
   const outcome = document.createElement("section");
-  outcome.className = `test-video-outcome ${approval ? "is-approved" : "is-rejected"}`;
+  outcome.className = `test-video-outcome ${approved ? "is-approved" : "is-rejected"}`;
 
   const heading = document.createElement("h3");
-  heading.textContent = approval ? "Approved" : "Not approved";
+  heading.textContent = approved ? "Approved" : "Not approved";
   outcome.append(heading);
 
-  const summary = document.createElement("p");
   const title =
     typeof video?.title === "string" ? `“${video.title}”` : "This video";
-  summary.textContent = approval
-    ? `${title} would be included in the productivity feed.`
-    : `${title} would not be included in the productivity feed.`;
+  const summary = document.createElement("p");
+  summary.textContent =
+    typeof decision?.summary === "string" && decision.summary
+      ? decision.summary
+      : `${title} has no verdict yet.`;
   outcome.append(summary);
 
-  if (
-    approval &&
-    typeof approval.reason === "string" &&
-    approval.reason.trim()
-  ) {
-    const reason = document.createElement("p");
-    reason.className = "test-video-reason";
-    reason.textContent = approval.reason;
-    outcome.append(reason);
+  const transcriptNote = document.createElement("p");
+  transcriptNote.className = "test-video-note";
+  transcriptNote.textContent = video?.used_transcript
+    ? `Judged with a transcript (~${video.transcript_tokens} tokens).`
+    : "Judged on the title and description only — no usable transcript.";
+  outcome.append(transcriptNote);
+
+  const checks = Array.isArray(decision?.checks) ? decision.checks : [];
+  if (checks.length) {
+    const list = document.createElement("ul");
+    list.className = "test-video-checks";
+    checks.forEach((check) => {
+      const item = document.createElement("li");
+      // `passed` is null when Jev never answered the question, which is not the
+      // same as a rule failing -- and not the same as a rule being satisfied.
+      const unanswered = check.answered === false || check.passed === null;
+      item.className = unanswered
+        ? "is-unanswered"
+        : check.passed
+          ? "is-pass"
+          : "is-fail";
+      const value = typeof check.value === "number" ? check.value.toFixed(2) : "no answer";
+      const verdict = unanswered ? "unanswered" : check.passed ? "pass" : "fail";
+      item.textContent =
+        `${check.kind === "positive" ? "Must be true" : "Red flag"} · ` +
+        `${check.name}: ${value} — ${verdict}`;
+      list.append(item);
+    });
+    outcome.append(list);
+  }
+
+  const rating = decision?.rating;
+  if (rating && typeof rating.score === "number") {
+    const ratingLine = document.createElement("p");
+    ratingLine.className = "test-video-note";
+    ratingLine.textContent =
+      `Rating ${rating.score} (minimum ${rating.minimum}` +
+      (typeof rating.confidence === "number"
+        ? `, confidence ${rating.confidence})`
+        : ")");
+    outcome.append(ratingLine);
+  }
+
+  const usage = result?.usage;
+  if (usage && typeof usage.input_tokens === "number") {
+    const usageLine = document.createElement("p");
+    usageLine.className = "test-video-note";
+    const cost = Number(usage.estimated_cost_usd || 0);
+    const model =
+      typeof usage.model === "string" && usage.model ? ` · ${usage.model}` : "";
+    usageLine.textContent =
+      `Cost ${usage.input_tokens.toLocaleString()} input tokens ` +
+      `(~$${cost.toFixed(6)})${model}`;
+    outcome.append(usageLine);
   }
 
   elements.testVideoResult.append(outcome);
@@ -482,40 +921,260 @@ async function saveCandidateLimits(event) {
   }
 }
 
-async function saveCurationPrompt(event) {
-  event.preventDefault();
-  const curationPrompt = elements.curationPromptInput.value.trim();
-  if (!curationPrompt) {
-    setStatus("Enter a curation prompt", "error", elements.curationPromptStatus);
-    elements.curationPromptInput.focus();
-    return;
-  }
+const JEV_THRESHOLD_LABELS = {
+  positives: "must score at least",
+  disqualifiers: "reject if at least",
+};
 
-  const submitButton = elements.curationPromptForm.querySelector("button[type='submit']");
-  submitButton.disabled = true;
-  setStatus("Saving...", "neutral", elements.curationPromptStatus);
+function toFiniteNumber(value, fallback) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function createJevRuleRow(kind, rule) {
+  const source = rule || {};
+  const row = document.createElement("div");
+  row.className = "jev-rule";
+  row.dataset.kind = kind;
+
+  const toggle = document.createElement("input");
+  toggle.type = "checkbox";
+  toggle.className = "jev-rule-enabled";
+  toggle.checked = source.enabled !== false;
+  toggle.title = "Rule enabled";
+  row.append(toggle);
+
+  const fields = document.createElement("div");
+  fields.className = "jev-rule-fields";
+
+  const name = document.createElement("input");
+  name.type = "text";
+  name.className = "jev-rule-name";
+  name.maxLength = 80;
+  name.placeholder = "Rule name";
+  name.value = source.name || "";
+
+  const instruction = document.createElement("input");
+  instruction.type = "text";
+  instruction.className = "jev-rule-instruction";
+  instruction.maxLength = 1000;
+  instruction.placeholder = "The yes/no question Jev answers about each video";
+  instruction.value = source.instruction || "";
+
+  const thresholdWrap = document.createElement("label");
+  thresholdWrap.className = "jev-rule-threshold";
+  const thresholdLabel = document.createElement("span");
+  thresholdLabel.textContent = JEV_THRESHOLD_LABELS[kind] || "threshold";
+  const threshold = document.createElement("input");
+  threshold.type = "number";
+  threshold.className = "jev-rule-threshold-input";
+  threshold.min = "0";
+  threshold.max = "1";
+  threshold.step = "0.05";
+  threshold.value = source.threshold ?? 0.5;
+  thresholdWrap.append(thresholdLabel, threshold);
+
+  fields.append(name, instruction, thresholdWrap);
+  row.append(fields);
+
+  const remove = createButton("Remove", "button-quiet", () => {
+    row.remove();
+    updateJevCounts();
+  });
+  remove.classList.add("jev-rule-remove");
+  row.append(remove);
+
+  return row;
+}
+
+function updateJevCounts() {
+  const summarise = (container) => {
+    const rows = Array.from(container.querySelectorAll(".jev-rule"));
+    const active = rows.filter((row) => {
+      const toggle = row.querySelector(".jev-rule-enabled");
+      return toggle && toggle.checked;
+    }).length;
+    return `${active} of ${rows.length} on`;
+  };
+  elements.jevPositivesCount.textContent = summarise(elements.jevPositives);
+  elements.jevDisqualifiersCount.textContent = summarise(elements.jevDisqualifiers);
+}
+
+function readJevRules(container) {
+  return Array.from(container.querySelectorAll(".jev-rule")).map((row) => ({
+    name: row.querySelector(".jev-rule-name").value.trim(),
+    instruction: row.querySelector(".jev-rule-instruction").value.trim(),
+    threshold: toFiniteNumber(
+      row.querySelector(".jev-rule-threshold-input").value,
+      0.5,
+    ),
+    enabled: row.querySelector(".jev-rule-enabled").checked,
+  }));
+}
+
+function renderJevSettings(config) {
+  elements.jevPreviewResult.replaceChildren();
+  const jev = config || {};
+  elements.jevProfile.value = jev.profile || "";
+
+  elements.jevPositives.replaceChildren();
+  (jev.positives || []).forEach((rule) =>
+    elements.jevPositives.append(createJevRuleRow("positives", rule)),
+  );
+  elements.jevDisqualifiers.replaceChildren();
+  (jev.disqualifiers || []).forEach((rule) =>
+    elements.jevDisqualifiers.append(createJevRuleRow("disqualifiers", rule)),
+  );
+
+  const rating = jev.rating || {};
+  elements.jevRatingEnabled.checked = Boolean(rating.enabled);
+  elements.jevRatingInstruction.value = rating.instruction || "";
+  elements.jevRatingCriteria.value = (rating.criteria || []).join("\n");
+  elements.jevRatingMinimum.value = rating.minimum ?? 0;
+
+  elements.jevTranscriptMin.value = jev.transcript_min_tokens ?? 1500;
+  elements.jevTranscriptMax.value = jev.transcript_max_tokens ?? 15000;
+
+  updateJevCounts();
+}
+
+function collectJevConfig() {
+  return {
+    profile: elements.jevProfile.value.trim(),
+    positives: readJevRules(elements.jevPositives),
+    disqualifiers: readJevRules(elements.jevDisqualifiers),
+    rating: {
+      enabled: elements.jevRatingEnabled.checked,
+      instruction: elements.jevRatingInstruction.value.trim(),
+      criteria: elements.jevRatingCriteria.value
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      minimum: toFiniteNumber(elements.jevRatingMinimum.value, 0),
+    },
+    transcript_min_tokens: Math.round(
+      toFiniteNumber(elements.jevTranscriptMin.value, 1500),
+    ),
+    transcript_max_tokens: Math.round(
+      toFiniteNumber(elements.jevTranscriptMax.value, 15000),
+    ),
+  };
+}
+
+async function saveJevSettings(event) {
+  event.preventDefault();
+  const submitButton = elements.jevForm.querySelector("button[type='submit']");
+  if (submitButton) submitButton.disabled = true;
+  setStatus("Saving rules...", "neutral", elements.jevStatus);
   try {
     const result = await request("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ curation_prompt: curationPrompt }),
+      body: JSON.stringify({ jev: collectJevConfig() }),
     });
     settings = result;
-    renderSettings();
-    setStatus("Prompt saved", "success", elements.curationPromptStatus);
+    renderJevSettings(settings.jev);
+    setStatus("Rules saved", "success", elements.jevStatus);
   } catch (error) {
-    setStatus(error.message, "error", elements.curationPromptStatus);
+    setStatus(error.message, "error", elements.jevStatus);
   } finally {
-    submitButton.disabled = false;
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
-function restoreDefaultCurationPrompt() {
-  elements.curationPromptInput.value = settings.default_curation_prompt;
-  setStatus("Default prompt restored. Save to apply it.", "neutral", elements.curationPromptStatus);
+// Rules are worth testing before they are saved: a threshold that looks
+// reasonable can quietly halve the feed. A threshold or name edit is answered
+// instantly from the last run's own answers; a new question is asked again.
+async function previewJevRules() {
+  elements.jevPreviewButton.disabled = true;
+  elements.jevPreviewResult.replaceChildren();
+  setStatus("Testing your rules...", "neutral", elements.jevStatus);
+  try {
+    const body = await request("/api/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectJevConfig()),
+    });
+
+    let preview = body?.preview;
+    if (!preview) {
+      const job = await followJob((running) =>
+        setStatus(describeJob(running), "neutral", elements.jevStatus),
+      );
+      if (!job) throw new Error("The preview did not start.");
+      if (job.state === "error") throw new Error(job.detail || "The preview failed.");
+      preview = job.result?.preview;
+    }
+    if (!preview) throw new Error("The preview returned nothing.");
+    renderRulePreview(preview);
+    setStatus(preview.headline, "success", elements.jevStatus);
+  } catch (error) {
+    setStatus(error.message, "error", elements.jevStatus);
+  } finally {
+    elements.jevPreviewButton.disabled = false;
+  }
 }
 
-async function addToWatchLater(video) {
+function renderRulePreview(preview) {
+  elements.jevPreviewResult.replaceChildren();
+  const heading = document.createElement("p");
+  heading.className = "jev-preview-headline";
+  heading.textContent = preview.headline;
+  elements.jevPreviewResult.append(heading);
+
+  const note = document.createElement("p");
+  note.className = "settings-hint";
+  const cost = Number(preview.usage?.estimated_cost_usd || 0);
+  const how =
+    preview.mode === "reused"
+      ? "Answered from the last run's own answers — nothing was sent to Jev."
+      : `Jev was asked again about ${preview.previewed} videos` +
+        (preview.with_transcript
+          ? `, ${preview.with_transcript} of them with transcripts`
+          : " without transcripts") +
+        ` (~$${cost.toFixed(6)}).`;
+  note.textContent = `${how} Nothing is saved until you press Save rules.`;
+  elements.jevPreviewResult.append(note);
+
+  const flips = (preview.changes || []).filter((change) => change.flipped);
+  if (!flips.length) {
+    const none = document.createElement("p");
+    none.className = "jev-preview-none";
+    none.textContent = "Every video keeps the verdict it has now.";
+    elements.jevPreviewResult.append(none);
+    return;
+  }
+
+  const list = document.createElement("ul");
+  list.className = "jev-preview-list";
+  flips.forEach((change) => {
+    const item = document.createElement("li");
+    item.className = change.now_approved ? "is-gained" : "is-lost";
+    const label = document.createElement("span");
+    label.className = "jev-preview-verdict";
+    label.textContent = change.now_approved ? "would pass" : "would drop out";
+    const title = document.createElement("span");
+    title.textContent = ` ${change.title}`;
+    const reason = document.createElement("span");
+    reason.className = "jev-preview-reason";
+    reason.textContent = ` — ${change.summary}`;
+    item.append(label, title, reason);
+    list.append(item);
+  });
+  elements.jevPreviewResult.append(list);
+}
+
+function restoreJevDefaults() {
+  renderJevSettings(settings.default_jev);
+  setStatus("Defaults loaded. Save to apply them.", "neutral", elements.jevStatus);
+}
+
+function addJevRule(container, kind) {
+  container.append(createJevRuleRow(kind, {}));
+  updateJevCounts();
+}
+
+async function addToWatchLater(video, button) {
   try {
     const result = await request("/api/watch-later", {
       method: "POST",
@@ -525,7 +1184,13 @@ async function addToWatchLater(video) {
     if (!result.already_saved) {
       watchLater = [...watchLater, result.video];
     }
-    render();
+    // Only this card's buttons change, so a video that is playing keeps playing.
+    const card = button?.closest(".video-card");
+    if (card) {
+      markCardWatchState(card, video);
+    } else {
+      render();
+    }
     setStatus(
       result.already_saved ? "Already saved" : "Saved to Watch later",
       "success",
@@ -545,7 +1210,13 @@ async function removeFromWatchLater(videoId) {
     );
     if (result.removed) {
       watchLater = watchLater.filter((video) => video.video_id !== videoId);
-      render();
+      const card = elements.watchLaterList.querySelector(
+        `.video-card[data-video-id="${videoId}"]`,
+      );
+      // Removing one saved video should not rebuild (and restart) the feed.
+      card?.remove();
+      elements.watchLaterCount.textContent = `${watchLater.filter(isVideo).length} saved`;
+      if (!watchLater.length) render();
       setStatus("Removed from Watch later", "success");
     }
   } catch (error) {
@@ -553,13 +1224,44 @@ async function removeFromWatchLater(videoId) {
   }
 }
 
+const JOB_POLL_MS = 700;
+
+function describeJob(job) {
+  const detail = typeof job?.detail === "string" ? job.detail : "";
+  return detail ? `${job.step} — ${detail}` : job?.step || "Working...";
+}
+
+// Long pipelines run on the server so the page can report each stage instead of
+// sitting on a silent request for minutes.
+async function followJob(onUpdate) {
+  for (;;) {
+    const result = await request("/api/progress");
+    const job = result?.job;
+    if (!job) return null;
+    if (onUpdate) onUpdate(job);
+    if (job.state !== "running") return job;
+    await new Promise((resolve) => setTimeout(resolve, JOB_POLL_MS));
+  }
+}
+
 async function refreshFeed() {
   elements.refreshButton.disabled = true;
-  setStatus("Refreshing feed...");
+  setStatus("Starting refresh...");
   try {
-    const result = await request("/api/refresh", { method: "POST" });
+    await request("/api/refresh", { method: "POST" });
+    const job = await followJob((running) =>
+      setStatus(describeJob(running), "neutral"),
+    );
+    if (!job) {
+      setStatus("The refresh did not start", "error");
+      return;
+    }
+    if (job.state === "error") {
+      setStatus(job.detail || "The refresh failed", "error");
+      return;
+    }
     await loadCollections();
-    setStatus(`Feed replaced with ${result.refreshed} videos`, "success");
+    setStatus(job.detail || "Feed refreshed", "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
@@ -579,20 +1281,50 @@ async function searchFeed(event) {
   elements.searchInput.disabled = true;
   setStatus(`Searching for ${query}...`);
   try {
-    const result = await request("/api/search", {
+    await request("/api/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
     });
-    await loadCollections();
-    setStatus(
-      `Feed replaced with ${result.approved} videos for ${result.query}`,
-      "success",
+    const job = await followJob((running) =>
+      setStatus(describeJob(running), "neutral"),
     );
+    if (!job) {
+      setStatus("The search did not start", "error");
+      return;
+    }
+    if (job.state === "error") {
+      setStatus(job.detail || "The search failed", "error");
+      return;
+    }
+    await loadCollections();
+    setStatus(job.detail || `Feed replaced for ${query}`, "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
     elements.searchInput.disabled = false;
+  }
+}
+
+// If the page is reloaded while a refresh is still running, pick the progress
+// back up rather than leaving the feed looking frozen.
+async function resumeRunningJob() {
+  try {
+    const result = await request("/api/progress");
+    if (!result?.job || result.job.state !== "running") return false;
+    elements.refreshButton.disabled = true;
+    const job = await followJob((running) => setStatus(describeJob(running), "neutral"));
+    elements.refreshButton.disabled = false;
+    if (job && job.state === "done") {
+      await loadCollections();
+      setStatus(job.detail, "success");
+    } else if (job && job.state === "error") {
+      setStatus(job.detail || "That run failed", "error");
+    }
+    return true;
+  } catch (error) {
+    elements.refreshButton.disabled = false;
+    return false;
   }
 }
 
@@ -623,34 +1355,8 @@ function loadYouTubePlayerApi() {
   return youtubePlayerApi;
 }
 
-// The API only observes the player the user already drives with its own play
-// button; nothing here starts playback programmatically, because a view that
-// the page initiates itself does not register with YouTube.
-function mountPlayers(container, videos) {
-  const targets = container.querySelectorAll("[data-video-id]");
-  if (!targets.length) return;
-
-  const videosById = new Map(videos.map((video) => [video.video_id, video]));
-  loadYouTubePlayerApi()
-    .then((YT) => {
-      targets.forEach((target) => {
-        const video = videosById.get(target.dataset.videoId);
-        if (!video || target.isConnected === false) return;
-        const player = new YT.Player(target, {
-          videoId: video.video_id,
-          playerVars: { rel: 0, playsinline: 1 },
-          events: {
-            onStateChange: (event) => handlePlayerState(video, event),
-          },
-        });
-        activePlayers.push(player);
-      });
-    })
-    .catch(() => {
-      // The plain embed already in the page keeps working without observation.
-    });
-}
-
+// Cards are activated one at a time by a click (see activatePlayer), so there is
+// no eager mounting step any more.
 function destroyPlayers() {
   flushPlayback();
   activePlayers.forEach((player) => {
@@ -746,6 +1452,90 @@ function recordWatchSeconds(videoId, seconds) {
   entry.seconds = Math.round((entry.seconds + seconds) * 10) / 10;
   entry.last_played_at = Date.now();
   saveWatchLog();
+  queueWatchReport(videoId);
+}
+
+// The server keeps its own record of what was watched so a later refresh can
+// stop offering it. Reports are batched and best-effort: losing one only means
+// the video may come back once.
+function queueWatchReport(videoId) {
+  const entry = watchLog.find((item) => item.video_id === videoId);
+  if (!entry || entry.seconds < MIN_WATCHED_SECONDS) return;
+
+  watchReportQueue.set(videoId, {
+    video_id: videoId,
+    seconds: entry.seconds,
+    title: entry.title,
+  });
+  if (watchReportTimer) return;
+  watchReportTimer = window.setTimeout(flushWatchReports, 2000);
+}
+
+async function flushWatchReports() {
+  watchReportTimer = null;
+  if (!watchReportQueue.size) return;
+
+  const entries = [...watchReportQueue.values()].slice(0, 50);
+  watchReportQueue.clear();
+  try {
+    await request("/api/watched", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+    await loadWatched();
+    applyWatchStateToCards();
+  } catch (error) {
+    // Reporting is a convenience; the local watch log still drives the banner.
+  }
+}
+
+async function loadWatched() {
+  try {
+    const records = await request("/api/watched");
+    watched = Array.isArray(records) ? records : [];
+  } catch (error) {
+    watched = [];
+  }
+}
+
+// Anything already in the browser's own watch log is sent once, so upgrading to
+// a server-side record does not start from an empty history.
+async function backfillWatched() {
+  const known = new Set(watched.map((record) => record.video_id));
+  const entries = watchLog
+    .filter(
+      (entry) =>
+        entry.seconds >= MIN_WATCHED_SECONDS &&
+        !known.has(entry.video_id) &&
+        VIDEO_ID_PATTERN.test(entry.video_id),
+    )
+    .slice(0, 50)
+    .map((entry) => ({
+      video_id: entry.video_id,
+      seconds: entry.seconds,
+      title: entry.title,
+    }));
+  if (!entries.length) return;
+
+  try {
+    await request("/api/watched", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+    await loadWatched();
+  } catch (error) {
+    // Nothing to recover: the live path will report the next watch anyway.
+  }
+}
+
+function applyWatchStateToCards() {
+  elements.feedList.querySelectorAll(".video-card").forEach((card) => {
+    const video = feed.find((item) => item.video_id === card.dataset.videoId);
+    if (video) markCardWatchState(card, video);
+  });
+  if (hideWatched) render();
 }
 
 async function verifyWatchLogging({ force = false } = {}) {
@@ -887,8 +1677,20 @@ elements.openSettingsButton.addEventListener("click", () =>
 );
 elements.testVideoForm.addEventListener("submit", submitTestVideo);
 elements.candidateLimitsForm.addEventListener("submit", saveCandidateLimits);
-elements.curationPromptForm.addEventListener("submit", saveCurationPrompt);
-elements.restoreDefaultPromptButton.addEventListener("click", restoreDefaultCurationPrompt);
+elements.openJevButton.addEventListener("click", () =>
+  elements.jevDialog.showModal(),
+);
+elements.jevForm.addEventListener("submit", saveJevSettings);
+elements.jevPreviewButton.addEventListener("click", previewJevRules);
+elements.jevAddPositive.addEventListener("click", () =>
+  addJevRule(elements.jevPositives, "positives"),
+);
+elements.jevAddDisqualifier.addEventListener("click", () =>
+  addJevRule(elements.jevDisqualifiers, "disqualifiers"),
+);
+elements.jevRestoreDefaults.addEventListener("click", restoreJevDefaults);
+elements.jevPositives.addEventListener("change", updateJevCounts);
+elements.jevDisqualifiers.addEventListener("change", updateJevCounts);
 elements.watchLogForm.addEventListener("submit", (event) => {
   event.preventDefault();
   verifyWatchLogging({ force: true });
@@ -897,17 +1699,71 @@ elements.watchLogBannerRecheck.addEventListener("click", () =>
   verifyWatchLogging({ force: true }),
 );
 elements.watchLogBannerFix.addEventListener("click", openYouTubeToFix);
+elements.hideWatched.addEventListener("change", () => {
+  hideWatched = elements.hideWatched.checked;
+  try {
+    window.localStorage.setItem(HIDE_WATCHED_STORAGE_KEY, String(hideWatched));
+  } catch (error) {
+    // Without storage the setting simply does not persist.
+  }
+  render();
+});
+
+// A tab left open across a refresh should not keep showing yesterday's feed.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    maybeAutoRefresh();
+  }
+});
+
+// "/" jumps to search and "r" refreshes, as long as the user is not typing.
+document.addEventListener("keydown", (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const target = event.target;
+  const typing =
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+  if (typing || event.key === "Escape") return;
+
+  if (event.key === "/") {
+    event.preventDefault();
+    elements.searchInput.focus();
+  } else if (event.key === "r" && !elements.refreshButton.disabled) {
+    event.preventDefault();
+    refreshFeed();
+  }
+});
 
 setInterval(() => {
   flushPlayback();
   verifyWatchLogging();
 }, VERIFY_INTERVAL_MS);
 
+// Watches recorded before this tab closes still make it to the server.
+window.addEventListener("pagehide", () => {
+  flushPlayback();
+  if (watchReportQueue.size) flushWatchReports();
+});
+
+async function maybeAutoRefresh() {
+  if (document.visibilityState !== "visible") return;
+  const ranAt = Number(lastRun?.ran_at) * 1000;
+  if (!ranAt || Date.now() - ranAt < STALE_FEED_MS) return;
+  if (elements.refreshButton.disabled) return;
+  setStatus("Feed is stale — refreshing...", "neutral");
+  await refreshFeed();
+}
+
 loadCollections().then(
-  () => {
+  async () => {
+    elements.hideWatched.checked = hideWatched;
     setStatus("Ready");
     renderWatchLogStatus();
     verifyWatchLogging();
+    await backfillWatched();
+    if (await resumeRunningJob()) return;
+    maybeAutoRefresh();
   },
   (error) => setStatus(error.message, "error"),
 );

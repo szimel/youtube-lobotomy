@@ -39,5 +39,21 @@
     "thumbnail_url": "https://i.ytimg.com/vi/0SerEuqAlAA/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDxB73kLwXFqnU-0WnJxg2nCtL9Ng",
     "published_at": "1y ago",
     "curation_reason": "This video involves tangible hardware modifications, which aligns with the user's interest in niche hobbies and skills."
+  },
+  {
+    "video_id": "4qdPcMNaioA",
+    "title": "Avoiding Bot Detection While Automating Microsoft Rewards",
+    "channel_name": "User0332",
+    "description": "In this video, I write an automation tool for Microsoft Rewards that completes every daily task for me: clicking on cards, performing searches, completing \"Explore on Bing\" tasks, and more!\n\nAlong the way, I implement techniques to mask the program as a human, including realistic mouse movement, typing, and action delays.\n\nThe source for this project can be found at https://github.com/User0332/rewards-farmer\n\n0:00 Intro\n0:53 Rewards Tasks\n2:55 Setting up the WebDriver\n4:20 Recording Keyboard Data\n4:52 Change of Plans\n5:32 Mimicking Human Mouse Movement\n10:49 Mimicking Human Keyboard Typing\n11:30 Integrating LLMs\n12:35 Putting it All Together\n13:13 Final Full Runthrough\n16:09 Conclusion",
+    "thumbnail_url": "https://i.ytimg.com/vi/4qdPcMNaioA/hqdefault.jpg?sqp=-oaymwEgCOADEI4CSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAJ8TGNMVSWD_ie6SdRdAo7jZV3fQ",
+    "curation_reason": "Passed every rule: Teaches something real 0.76"
+  },
+  {
+    "video_id": "3YtygAx_C6A",
+    "title": "A Walkable ASCII Cyberpunk City in One HTML File",
+    "channel_name": "Grow Now! Games",
+    "description": "Update: With the recent release of Prototype 2, I've made Prototype 1 free to access: https://ko-fi.com/grownowgames/shop\n\nI wanted to build a city that feels alive, but is made entirely from ASCII characters.\n\nThis is a small custom engine built with JavaScript and Canvas \u2014 no Unity, Unreal, 3D models, textures, or shaders. The world is a grid-based city with roads, buildings, trees, cars, and pedestrians. \n\nEvery frame, the engine raycasts from the camera to work out perspective, depth, collisions, and what should be visible, then draws it all using letters, numbers, and symbols.\n\nIn other words: it\u2019s a tiny 3D city made from blocks, viewed through a screen of ASCII characters.\n\nStill a work in progress, but I\u2019m going to keep pushing the atmosphere, detail, and interaction further.\n\n#ASCII #ASCIICity #Cyberpunk #IndieDev #GameDev #JavaScript #HTML5Canvas #Raycasting #CreativeCoding #ProceduralGeneration #CodingProject",
+    "thumbnail_url": "https://i.ytimg.com/vi/3YtygAx_C6A/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAr87Vv1wJgsWJC_awnEtAo3pyAXg",
+    "curation_reason": "Passed every rule: Teaches something real 0.53"
   }
 ]
