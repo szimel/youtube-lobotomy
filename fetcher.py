@@ -136,6 +136,46 @@ class LiveTestUnavailableError(RuntimeError):
     """Raised when the single-video curation test cannot start."""
 
 
+MAX_PROVIDER_ERROR_DETAIL = 300
+
+
+def _redact_secrets(text: str) -> str:
+    """Guarantees a provider message can never echo back the configured API key."""
+    secret = os.environ.get("OPENAI_API_KEY", "").strip()
+    if secret:
+        text = text.replace(secret, "[redacted]")
+    return text
+
+
+def _provider_error_detail(error: Exception) -> str:
+    """Extracts a short, credential-safe reason from an OpenAI SDK exception.
+
+    Without this the caller only ever sees a generic "could not filter" string,
+    which hides actionable causes such as an invalid key, an unknown model, or
+    an exceeded quota.
+    """
+    detail = ""
+    body = getattr(error, "body", None)
+    payload = body
+    if isinstance(body, dict) and isinstance(body.get("error"), dict):
+        # Some SDK/endpoint combinations nest the payload under "error".
+        payload = body["error"]
+    if isinstance(payload, dict):
+        code = payload.get("code")
+        message = payload.get("message")
+        if isinstance(code, str) and code.strip():
+            detail = code.strip()
+        if isinstance(message, str) and message.strip():
+            detail = f"{detail}: {message.strip()}" if detail else message.strip()
+    if not detail:
+        detail = str(error).strip() or error.__class__.__name__
+
+    detail = " ".join(_redact_secrets(detail).split())
+    if len(detail) > MAX_PROVIDER_ERROR_DETAIL:
+        detail = detail[: MAX_PROVIDER_ERROR_DETAIL - 3] + "..."
+    return detail
+
+
 @dataclass(frozen=True)
 class InnerTubeConfig:
     api_key: str
@@ -662,7 +702,10 @@ class VideoCurator:
                 ],
             )
         except Exception as error:
-            raise ProviderRequestError("OpenAI could not filter the YouTube results.") from error
+            raise ProviderRequestError(
+                "OpenAI could not filter the YouTube results. "
+                f"({error.__class__.__name__}: {_provider_error_detail(error)})"
+            ) from error
 
         content = completion.choices[0].message.content if completion.choices else None
         if not isinstance(content, str):

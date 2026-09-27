@@ -80,32 +80,43 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(response.get_json()["error"], "feed_refresh_not_configured")
         self.assertEqual(json.loads(feed_path.read_text(encoding="utf-8")), [VIDEO])
 
-    def test_refresh_replaces_the_ephemeral_feed_after_success(self):
+    def test_refresh_replaces_the_feed_after_success(self):
         with patch("app.fetch_latest_feed", return_value=[VIDEO]):
             response = self.client.post("/api/refresh")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"refreshed": 1, "added": 1})
+        self.assertEqual(response.get_json(), {"refreshed": 1})
         self.assertEqual(
             json.loads((self.data_directory / "feed.json").read_text(encoding="utf-8")),
             [VIDEO],
         )
 
-    def test_refresh_appends_only_unseen_videos_to_the_feed(self):
-        existing_video = dict(VIDEO, video_id="aaaaaaaaaaa")
+    def test_refresh_overwrites_existing_feed_videos(self):
+        stale_video = dict(VIDEO, video_id="aaaaaaaaaaa")
         new_video = dict(VIDEO, video_id="bbbbbbbbbbb")
         feed_path = self.data_directory / "feed.json"
         feed_path.parent.mkdir(parents=True, exist_ok=True)
-        feed_path.write_text(json.dumps([existing_video]), encoding="utf-8")
+        feed_path.write_text(json.dumps([stale_video]), encoding="utf-8")
 
-        with patch("app.fetch_latest_feed", return_value=[existing_video, new_video]):
+        with patch("app.fetch_latest_feed", return_value=[new_video]):
             response = self.client.post("/api/refresh")
 
-        self.assertEqual(response.get_json(), {"refreshed": 2, "added": 1})
+        self.assertEqual(response.get_json(), {"refreshed": 1})
         self.assertEqual(
             json.loads(feed_path.read_text(encoding="utf-8")),
-            [existing_video, new_video],
+            [new_video],
         )
+
+    def test_refresh_empties_the_feed_when_nothing_is_approved(self):
+        feed_path = self.data_directory / "feed.json"
+        feed_path.parent.mkdir(parents=True, exist_ok=True)
+        feed_path.write_text(json.dumps([VIDEO]), encoding="utf-8")
+
+        with patch("app.fetch_latest_feed", return_value=[]):
+            response = self.client.post("/api/refresh")
+
+        self.assertEqual(response.get_json(), {"refreshed": 0})
+        self.assertEqual(json.loads(feed_path.read_text(encoding="utf-8")), [])
 
     def test_refresh_returns_a_provider_failure(self):
         with patch(
@@ -132,13 +143,18 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(response.get_json()["error"], "search_not_configured")
         self.assertEqual(json.loads(feed_path.read_text(encoding="utf-8")), [VIDEO])
 
-    def test_search_appends_the_ephemeral_feed_after_success(self):
+    def test_search_replaces_the_feed_after_success(self):
+        stale_video = dict(VIDEO, video_id="aaaaaaaaaaa")
+        feed_path = self.data_directory / "feed.json"
+        feed_path.parent.mkdir(parents=True, exist_ok=True)
+        feed_path.write_text(json.dumps([stale_video]), encoding="utf-8")
+
         with patch("app.search_and_filter_videos", return_value=[VIDEO]) as search:
             response = self.client.post("/api/search", json={"query": "home servers"})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.get_json(), {"query": "home servers", "approved": 1, "added": 1}
+            response.get_json(), {"query": "home servers", "approved": 1}
         )
         search.assert_called_once_with(
             "home servers",
@@ -152,7 +168,6 @@ class ApiTestCase(unittest.TestCase):
         )
 
     def test_feed_removal_is_persistent_and_idempotent(self):
-        self.client.post("/api/refresh")
         feed_path = self.data_directory / "feed.json"
         feed_path.parent.mkdir(parents=True, exist_ok=True)
         feed_path.write_text(json.dumps([VIDEO]), encoding="utf-8")

@@ -83,22 +83,6 @@ def write_video_list(path: Path, videos: list[dict]) -> None:
     os.replace(temporary_path, path)
 
 
-def append_unique_videos(existing: list[dict], incoming: list[dict]) -> list[dict]:
-    seen_video_ids = {
-        video_id
-        for video in existing
-        if isinstance(video_id := video.get("video_id"), str)
-    }
-    additions: list[dict] = []
-    for video in incoming:
-        video_id = video.get("video_id")
-        if not isinstance(video_id, str) or video_id in seen_video_ids:
-            continue
-        seen_video_ids.add(video_id)
-        additions.append(video)
-    return existing + additions
-
-
 def normalize_video(payload: object) -> tuple[dict | None, str | None]:
     if not isinstance(payload, dict):
         return None, "Request body must be a JSON object."
@@ -358,12 +342,10 @@ def create_app(config: dict | None = None) -> Flask:
         except ProviderRequestError as error:
             return jsonify({"error": "feed_refresh_failed", "message": str(error)}), 502
 
-        path = data_path("feed.json")
-        existing_feed = read_video_list(path)
-        updated_feed = append_unique_videos(existing_feed, videos)
-        added = len(updated_feed) - len(existing_feed)
-        write_video_list(path, updated_feed)
-        return jsonify({"refreshed": len(videos), "added": added})
+        # The Current feed is a snapshot of the most recent results rather than
+        # an accumulating list, so a refresh replaces it outright.
+        write_video_list(data_path("feed.json"), list(videos))
+        return jsonify({"refreshed": len(videos)})
 
     @app.post("/api/search")
     def search_feed():
@@ -385,12 +367,9 @@ def create_app(config: dict | None = None) -> Flask:
         except ProviderRequestError as error:
             return jsonify({"error": "search_failed", "message": str(error)}), 502
 
-        path = data_path("feed.json")
-        existing_feed = read_video_list(path)
-        updated_feed = append_unique_videos(existing_feed, videos)
-        added = len(updated_feed) - len(existing_feed)
-        write_video_list(path, updated_feed)
-        return jsonify({"query": query, "approved": len(videos), "added": added})
+        # Search results replace the Current feed for the same reason.
+        write_video_list(data_path("feed.json"), list(videos))
+        return jsonify({"query": query, "approved": len(videos)})
 
     return app
 

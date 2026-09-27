@@ -134,10 +134,7 @@ function createVideoCard(video, saved) {
       () => addToWatchLater(video),
     );
     saveButton.disabled = alreadySaved;
-    actions.append(
-      saveButton,
-      createButton("Remove", "button-quiet", () => removeFromFeed(video.video_id)),
-    );
+    actions.append(saveButton);
   }
 
   card.append(player, details, actions);
@@ -452,28 +449,13 @@ async function removeFromWatchLater(videoId) {
   }
 }
 
-async function removeFromFeed(videoId) {
-  try {
-    const result = await request(`/api/feed/${encodeURIComponent(videoId)}`, {
-      method: "DELETE",
-    });
-    if (result.removed) {
-      feed = feed.filter((video) => video.video_id !== videoId);
-      render();
-      setStatus("Removed from Current feed", "success");
-    }
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-}
-
 async function refreshFeed() {
   elements.refreshButton.disabled = true;
   setStatus("Refreshing feed...");
   try {
     const result = await request("/api/refresh", { method: "POST" });
     await loadCollections();
-    setStatus(`${result.added} new videos added to Current feed`, "success");
+    setStatus(`Feed replaced with ${result.refreshed} videos`, "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
@@ -500,7 +482,7 @@ async function searchFeed(event) {
     });
     await loadCollections();
     setStatus(
-      `${result.added} new videos added for ${result.query}`,
+      `Feed replaced with ${result.approved} videos for ${result.query}`,
       "success",
     );
   } catch (error) {

@@ -36,6 +36,14 @@ class FakeCompletions:
         )
 
 
+class FakeApiError(Exception):
+    """Mimics the shape of an OpenAI SDK error, which carries a parsed `body`."""
+
+    def __init__(self, body):
+        super().__init__("provider failure")
+        self.body = body
+
+
 class FetcherTestCase(unittest.TestCase):
     def test_extract_videos_normalizes_and_deduplicates_renderers(self):
         response = {
@@ -122,6 +130,85 @@ class FetcherTestCase(unittest.TestCase):
         self.assertEqual(
             completion.request["messages"][0]["content"], "Only approve baking videos."
         )
+
+    def test_curation_surfaces_the_provider_error_detail(self):
+        class FailingCompletions:
+            def create(self, **kwargs):
+                raise FakeApiError(
+                    {
+                        "code": "invalid_api_key",
+                        "message": "Incorrect API key provided: sk-proj-abc.",
+                        "param": None,
+                        "type": "invalid_request_error",
+                    }
+                )
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=FailingCompletions()))
+
+        with self.assertRaises(ProviderRequestError) as context:
+            VideoCurator(client, "test-model").curate([VIDEO])
+
+        message = str(context.exception)
+        self.assertIn("FakeApiError", message)
+        self.assertIn("invalid_api_key", message)
+        self.assertIn("Incorrect API key provided", message)
+
+    def test_curation_handles_a_nested_provider_error_body(self):
+        class FailingCompletions:
+            def create(self, **kwargs):
+                raise FakeApiError(
+                    {
+                        "error": {
+                            "code": "model_not_found",
+                            "message": "The model does not exist.",
+                        }
+                    }
+                )
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=FailingCompletions()))
+
+        with self.assertRaises(ProviderRequestError) as context:
+            VideoCurator(client, "test-model").curate([VIDEO])
+
+        message = str(context.exception)
+        self.assertIn("model_not_found", message)
+        self.assertIn("The model does not exist.", message)
+
+    def test_curation_falls_back_to_the_exception_message(self):
+        class FailingCompletions:
+            def create(self, **kwargs):
+                raise RuntimeError("connection reset by peer")
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=FailingCompletions()))
+
+        with self.assertRaises(ProviderRequestError) as context:
+            VideoCurator(client, "test-model").curate([VIDEO])
+
+        self.assertIn("connection reset by peer", str(context.exception))
+
+    def test_curation_never_echoes_the_api_key(self):
+        secret = "sk-proj-super-secret-value"
+
+        class FailingCompletions:
+            def create(self, **kwargs):
+                raise FakeApiError(
+                    {
+                        "error": {
+                            "code": "invalid_api_key",
+                            "message": f"Incorrect API key provided: {secret}",
+                        }
+                    }
+                )
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=FailingCompletions()))
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": secret}):
+            with self.assertRaises(ProviderRequestError) as context:
+                VideoCurator(client, "test-model").curate([VIDEO])
+
+        message = str(context.exception)
+        self.assertNotIn(secret, message)
+        self.assertIn("[redacted]", message)
 
     def test_home_without_candidate_videos_is_a_provider_failure(self):
         client = object.__new__(YouTubeInnerTubeClient)

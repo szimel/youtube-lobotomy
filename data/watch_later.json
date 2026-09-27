@@ -16,11 +16,27 @@
     "curation_reason": "This video explores a tangible hardware modification and renewable energy project, fitting the user's interest in creative real-world activities."
   },
   {
-    "video_id": "HfSO-LCKmrA",
-    "title": "There\u2019s a Class 100 semiconductor cleanroom inside this backyard shed.",
-    "channel_name": "Dr.Semiconductor",
+    "video_id": "mntjF2vmYFU",
+    "title": "Making assumptions to make my code less clunky",
+    "channel_name": "sphaerophoria",
     "description": "",
-    "thumbnail_url": "https://i.ytimg.com/vi/HfSO-LCKmrA/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAF7o2lcYeNkQFe0LaEtGocuRh1AQ",
-    "curation_reason": "This video likely covers a unique and educational hardware project involving semiconductor technology, fitting the criteria for tangible hardware modifications."
+    "thumbnail_url": "https://i.ytimg.com/vi/mntjF2vmYFU/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLDnGjt8IkL4rb51vPVBp6CLllXH4g",
+    "curation_reason": "This video likely provides insights into programming techniques, which aligns with the user's interest in programming tutorials."
+  },
+  {
+    "video_id": "QC6A7xiBi3s",
+    "title": "What the heck IS this thing?",
+    "channel_name": "Hardware Haven",
+    "description": "",
+    "thumbnail_url": "https://i.ytimg.com/vi/QC6A7xiBi3s/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLANXiWKTFPLY91kl2xn67X3x60jPw",
+    "curation_reason": "This video likely explores a piece of hardware, fitting the user's interest in tangible hardware modifications."
+  },
+  {
+    "video_id": "_j806JHhCRo",
+    "title": "Speaking With The Mind | Neuralink",
+    "channel_name": "Neuralink",
+    "description": "",
+    "thumbnail_url": "https://i.ytimg.com/vi/_j806JHhCRo/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLB-T883IvVmvlLAS9uzoXMjs-BtqA",
+    "curation_reason": "This video likely offers a deep dive into Neuralink's technology, which is educational and aligns with the user's interest in science and engineering."
   }
 ]
