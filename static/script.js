@@ -292,8 +292,13 @@ function markCardWatchState(card, video) {
   }
 }
 
-// Nothing here starts a video on its own: the click below is the same user
-// gesture as pressing play inside the embed, which is what YouTube counts.
+// Clicking the poster opens the player and stops there. YouTube's IFrame API
+// reference is explicit: "A playback only counts toward a video's official view
+// count if it is initiated via a native play button in the player." Calling
+// playVideo() here would be programmatic playback, so the video would play
+// without ever registering -- which is the opposite of the point of watching it
+// here. The click that follows, on the player's own play button, is the one
+// that counts.
 function activatePlayer(player, poster, video) {
   if (player.classList.contains("is-playing")) return;
   const target = player.querySelector(".player-target");
@@ -310,13 +315,6 @@ function activatePlayer(player, poster, video) {
         videoId: video.video_id,
         playerVars: { rel: 0, playsinline: 1, autoplay: 0 },
         events: {
-          onReady: (event) => {
-            try {
-              event.target.playVideo();
-            } catch (error) {
-              // The embed's own play button is still there to press.
-            }
-          },
           onStateChange: (event) => handlePlayerState(video, event),
         },
       });

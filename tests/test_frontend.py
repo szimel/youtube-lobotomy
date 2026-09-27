@@ -94,6 +94,20 @@ class FrontendTestCase(unittest.TestCase):
         duplicates = {name for name in template_ids if template_ids.count(name) > 1}
         self.assertEqual(sorted(duplicates), [], "the template repeats an id")
 
+    def test_playback_is_never_started_programmatically(self):
+        # YouTube counts a view only when playback begins at its own play
+        # button: "A playback only counts toward a video's official view count
+        # if it is initiated via a native play button in the player." Calling
+        # playVideo() -- or autoplaying -- would play the video without it ever
+        # registering, which defeats the reason for watching it here.
+        script = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIsNone(
+            re.search(r"\.playVideo\s*\(", script),
+            "the player must not be started from code",
+        )
+        self.assertNotIn("autoplay: 1", script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,8 +5,9 @@ A local YouTube client that only shows videos worth watching.
 Instead of opening YouTube and getting whatever its recommendation engine wants
 to sell you that day, this app reads your home feed, judges every candidate
 against rules *you* write, and keeps only what passes. Videos play inside the
-page, which still counts as a normal view, so your real recommendations keep
-improving from what you actually watch here.
+page, and playback starts from YouTube's own play button — the only kind its
+documentation counts as a view — so your real recommendations keep improving
+from what you actually watch here.
 
 It runs on your machine, stores everything in `data/`, and talks to exactly two
 external services: YouTube (through your own exported cookies) and
