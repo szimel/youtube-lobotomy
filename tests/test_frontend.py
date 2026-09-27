@@ -21,6 +21,16 @@ ID_ATTRIBUTE = re.compile(r'id="([^"]+)"')
 ID_SELECTOR = re.compile(r'querySelector\(\s*"#([A-Za-z0-9_-]+)"')
 
 
+def function_source(script: str, name: str) -> str:
+    """One top-level function, up to the closing brace in the first column."""
+    match = re.search(
+        rf"^(?:async )?function {re.escape(name)}\(.*?\n\}}\n", script, re.S | re.M
+    )
+    if match is None:
+        raise AssertionError(f"{name} should be defined at the top level")
+    return match.group(0)
+
+
 class FrontendTestCase(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -93,6 +103,49 @@ class FrontendTestCase(unittest.TestCase):
         template_ids = ID_ATTRIBUTE.findall(TEMPLATE.read_text(encoding="utf-8"))
         duplicates = {name for name in template_ids if template_ids.count(name) > 1}
         self.assertEqual(sorted(duplicates), [], "the template repeats an id")
+
+    def test_saving_from_the_feed_adds_the_card_to_watch_later(self):
+        # The feed and Watch later are separate lists. Saving used to update the
+        # file and the feed card's button but never the Watch later list, so a
+        # saved video only appeared after a reload: correct state, stale screen.
+        script = SCRIPT.read_text(encoding="utf-8")
+
+        saving = function_source(script, "addToWatchLater")
+        self.assertIn(
+            "addWatchLaterCard(",
+            saving,
+            "saving must add a card, not just update the file",
+        )
+
+        adding = function_source(script, "addWatchLaterCard")
+        self.assertIn("elements.watchLaterList", adding)
+        self.assertIn("createVideoCard(video, true)", adding)
+        self.assertIn(
+            'querySelector(".empty-state")',
+            adding,
+            "the empty message must not be left above the card",
+        )
+        self.assertIn("updateWatchLaterCount()", adding)
+
+    def test_the_count_is_written_in_one_place(self):
+        # Three places used to build "N saved" by hand, and the newest one
+        # forgot to: the number under the heading is what tells you the save
+        # worked, so it comes from one function.
+        script = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "updateWatchLaterCount()",
+            function_source(script, "render"),
+        )
+        self.assertIn(
+            "updateWatchLaterCount()",
+            function_source(script, "removeFromWatchLater"),
+        )
+        self.assertEqual(
+            script.count("saved`"),
+            1,
+            "only updateWatchLaterCount should build the count text",
+        )
 
     def test_playback_is_never_started_programmatically(self):
         # YouTube counts a view only when playback begins at its own play

@@ -359,6 +359,10 @@ function visibleFeed() {
   return valid.filter((video) => !seen.has(video.video_id));
 }
 
+function updateWatchLaterCount() {
+  elements.watchLaterCount.textContent = `${watchLater.filter(isVideo).length} saved`;
+}
+
 function render() {
   destroyPlayers();
   const visible = visibleFeed();
@@ -380,7 +384,7 @@ function render() {
   elements.feedCount.textContent =
     `${visible.length} video${visible.length === 1 ? "" : "s"}` +
     (hidden > 0 ? ` · ${hidden} watched hidden` : "");
-  elements.watchLaterCount.textContent = `${watchLater.filter(isVideo).length} saved`;
+  updateWatchLaterCount();
 }
 
 function renderTrustedCreators() {
@@ -1172,6 +1176,21 @@ function addJevRule(container, kind) {
   updateJevCounts();
 }
 
+// Saving from the feed has to grow the Watch later list too: it is a separate
+// list, and nothing but a full render used to put the new card in it, so the
+// video only appeared after a reload. The card is built here instead, which
+// leaves whatever is playing in the feed alone.
+function addWatchLaterCard(video) {
+  const existing = elements.watchLaterList.querySelector(
+    `.video-card[data-video-id="${video.video_id}"]`,
+  );
+  if (existing) return;
+
+  elements.watchLaterList.querySelector(".empty-state")?.remove();
+  elements.watchLaterList.append(createVideoCard(video, true));
+  updateWatchLaterCount();
+}
+
 async function addToWatchLater(video, button) {
   try {
     const result = await request("/api/watch-later", {
@@ -1179,12 +1198,13 @@ async function addToWatchLater(video, button) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(video),
     });
-    if (!result.already_saved) {
+    if (!watchLater.some((item) => item.video_id === result.video.video_id)) {
       watchLater = [...watchLater, result.video];
     }
     // Only this card's buttons change, so a video that is playing keeps playing.
     const card = button?.closest(".video-card");
     if (card) {
+      addWatchLaterCard(result.video);
       markCardWatchState(card, video);
     } else {
       render();
@@ -1213,7 +1233,7 @@ async function removeFromWatchLater(videoId) {
       );
       // Removing one saved video should not rebuild (and restart) the feed.
       card?.remove();
-      elements.watchLaterCount.textContent = `${watchLater.filter(isVideo).length} saved`;
+      updateWatchLaterCount();
       if (!watchLater.length) render();
       setStatus("Removed from Watch later", "success");
     }
