@@ -14,13 +14,13 @@
 services:
   productivity-feed:
     # Once the GitHub Actions workflow has published an image (see README),
-    # point this at it. Replace YOUR_GITHUB_USER with your account or org.
-    image: ghcr.io/YOUR_GITHUB_USER/youtube-lobotomy:latest
+    # point this at it. The workflow names it after the repository, lowercased.
+    image: ghcr.io/szimel/youtube-lobotomy:latest
 
     # Or, with no registry at all, build from a checkout or straight from the
     # repository:
     #   build: .
-    #   build: https://github.com/YOUR_GITHUB_USER/youtube-lobotomy.git
+    #   build: https://github.com/szimel/youtube-lobotomy.git
     # With both keys present, Compose pulls first and only builds if the pull
     # fails -- so `docker compose up -d` works either way. Add
     # `pull_policy: build` to always use a local build instead.

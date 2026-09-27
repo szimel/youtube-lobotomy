@@ -115,7 +115,7 @@ Jev key, and nothing else:
 ```yaml
 services:
   productivity-feed:
-    image: ghcr.io/YOUR_GITHUB_USER/youtube-lobotomy:latest
+    image: ghcr.io/szimel/youtube-lobotomy:latest
     container_name: productivity-feed
     restart: unless-stopped
     ports:
@@ -151,8 +151,8 @@ lives in that one mounted directory, so backing it up means copying `./data`.
 repository:
 
 ```yaml
-    build: .                                                  # a local checkout
-    build: https://github.com/YOUR_GITHUB_USER/youtube-lobotomy.git   # or the repo
+    build: .                                                          # a local checkout
+    build: https://github.com/szimel/youtube-lobotomy.git             # or the repo
 ```
 
 Compose builds when the image is missing, so `docker compose up -d` works either
@@ -161,7 +161,7 @@ clone of the pushed commits — uncommitted local edits are invisible to it.)
 
 **Publishing your own image.** `.github/workflows/docker-publish.yml` runs the
 tests, then builds `linux/amd64` and `linux/arm64` images and pushes them to
-`ghcr.io/<your-account>/youtube-lobotomy` on every push to `main` and every `v*`
+`ghcr.io/szimel/youtube-lobotomy` on every push to `main` and every `v*`
 tag. Two things to know:
 
 - GitHub makes a new package **private**. Pulling it anonymously — which is what
