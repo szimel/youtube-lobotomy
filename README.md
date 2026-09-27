@@ -69,6 +69,138 @@ is explicit: a jar with no `SAPISID` cookie is rejected, because YouTube answers
 search and video lookups anyway — as a signed-out stranger — and the app would
 happily curate the wrong feed.
 
+**Export from a machine on the same connection as the app.** yt-dlp's
+documentation is blunt that this kind of authentication "requires cookies from a
+browser with the same IP address that you will be using with yt-dlp". Exporting
+at home and running the app at home keeps one public IP and works; exporting on a
+phone over mobile data and running the app on the server does not.
+
+**Worth knowing:** yt-dlp's own caveat is that using an account with it "you run
+the risk of it being banned (temporarily or permanently)", which is why they
+suggest a throwaway account and a modest request rate. This app reads a home feed
+and a handful of captions per refresh, which is far below the rate limits they
+describe, but the warning is theirs, not mine, and it is about your Google
+account rather than about this software.
+
+## Running on a home server
+
+### It does not need a browser
+
+Nothing on the server side renders a page or drives one. The app's whole
+interaction with YouTube is `cookies.txt` plus yt-dlp, and videos play in
+whatever browser is *looking* at the page — your phone, your laptop, anything
+with a browser on the same network. A headless Ubuntu box works exactly like the
+Windows desktop.
+
+Two things follow from that:
+
+- `--cookies-from-browser` needs a browser profile on the machine running it,
+  but `--cookies FILE` (what this app uses) does not. Export the jar wherever you
+  have a browser, copy it to `data/cookies.txt`, and the server is happy.
+- A CRLF jar exported on Windows works as-is on Linux. Python opens cookie files
+  in text mode, which translates `\r\n` to `\n` before parsing, and yt-dlp
+  rewrites the file with Unix line endings after its first run. (yt-dlp's FAQ
+  suggests converting with `dos2unix` if you ever hit `HTTP Error 400` on a
+  cookie file — harmless advice, just not necessary here.)
+
+The one thing that *is* worth getting right is the public IP, as above: the
+cookies must be exported from a browser on the same connection the server uses.
+
+### With Docker
+
+The repository builds a self-contained image. It needs a data directory and a
+Jev key, and nothing else:
+
+```yaml
+services:
+  productivity-feed:
+    image: ghcr.io/YOUR_GITHUB_USER/youtube-lobotomy:latest
+    container_name: productivity-feed
+    restart: unless-stopped
+    ports:
+      - 8087:8080
+    environment:
+      JEV_API_KEY: ${JEV_API_KEY}
+      PUID: 1000     # `id -u` on the host, so the mounted data dir is writable
+      PGID: 1000     # `id -g`
+    volumes:
+      - ./data:/app/data
+    networks:
+      - caddy_net
+
+networks:
+  caddy_net:
+    external: true
+```
+
+`compose.yaml` in this repository is that block, ready to copy. Then:
+
+```bash
+mkdir -p ./data
+cp /path/to/cookies.txt ./data/cookies.txt
+docker compose up -d
+docker compose logs -f          # watch a refresh happen
+```
+
+There is no separate "install" step and no database. Everything the app writes —
+the feed, the rulebook, the run history, the transcript cache, the cookies —
+lives in that one mounted directory, so backing it up means copying `./data`.
+
+**No registry yet?** Build it from a checkout, or point Compose straight at the
+repository:
+
+```yaml
+    build: .                                                  # a local checkout
+    build: https://github.com/YOUR_GITHUB_USER/youtube-lobotomy.git   # or the repo
+```
+
+Compose builds when the image is missing, so `docker compose up -d` works either
+way, and `docker compose build --pull` updates it. (A git context is a shallow
+clone of the pushed commits — uncommitted local edits are invisible to it.)
+
+**Publishing your own image.** `.github/workflows/docker-publish.yml` runs the
+tests, then builds `linux/amd64` and `linux/arm64` images and pushes them to
+`ghcr.io/<your-account>/youtube-lobotomy` on every push to `main` and every `v*`
+tag. Two things to know:
+
+- GitHub makes a new package **private**. Pulling it anonymously — which is what
+  a home server wants — needs one visit to the package's settings → *Danger
+  Zone* → *Change visibility* → *Public*. It cannot be made private again.
+- With no registry at all, `docker save youtube-lobotomy:dev | ssh server
+  'docker load'` also works.
+
+### Reaching it over Tailscale
+
+A container port published as `8087:8080` is reachable on the LAN and over
+Tailscale at `http://<tailscale-ip>:8087`. That is the simplest option and it
+works. Two refinements worth considering:
+
+- **Bind to the Tailscale address only** — replace the `ports:` entry with
+  `- "100.x.y.z:8087:8080"` so the app is not also on the LAN.
+- **Serve it over HTTPS** — keep the app on `127.0.0.1:8080` and run
+  `tailscale serve 8080`, which gives
+  `https://<machine>.<tailnet>.ts.net` with a real certificate. Beyond the nicer
+  URL, this matters for playback: YouTube requires the embedding page to send a
+  `Referer`, and an HTTPS public origin is the configuration its documentation
+  describes. Tailscale's own advice is the same — keep the service on localhost
+  and let Serve be the only way in.
+
+If you put anything in front of the app that rewrites the `Host` header and does
+*not* send `X-Forwarded-Host`, its writes will be refused with 403
+`cross_site_request`. Declaring the public address fixes it:
+
+```yaml
+      PUBLIC_ORIGINS: https://feed.example.com
+```
+
+### Without Docker
+
+`run.sh` is the Linux counterpart of `run.ps1`: it checks the virtualenv, the
+dependencies, `.env` and the cookies before starting, and prints what is missing.
+A `systemd` unit running `gunicorn --config docker/gunicorn.conf.py app:app`
+works too — use **one worker**, because the refresh queue and the progress the
+page polls live in the process's memory.
+
 ## How curation works
 
 Jev is a **decision model, not a chat model**. It answers yes/no questions and
@@ -147,7 +279,7 @@ Everything lives in `data/`, and all of it is plain JSON you can read or delete.
 ## Development
 
 ```powershell
-.venv\Scripts\python.exe -m unittest discover -s tests   # 131 tests
+.venv\Scripts\python.exe -m unittest discover   # 142 tests
 node --check static/script.js
 ```
 
@@ -172,4 +304,8 @@ second request gets `409`.
 | Feed comes back with 1–2 videos | Open **Filtered out** and read the verdicts. The rules may simply be tight; **Preview against last run** shows what a looser threshold would let through. |
 | "N videos could not be judged" | Jev calls failed (usually transient). Those videos are not rejections — refresh again. |
 | "N judged on title alone" | Captions were rate limited or the video has none. This is normal for some videos, and it is reported rather than hidden. |
+| Every button returns 403 `cross_site_request` | Something in front of the app rewrites the `Host` header without forwarding `X-Forwarded-Host`. Set `PUBLIC_ORIGINS` to the address in your browser's bar. |
 | Refresh returns 409 | A job is already running. Wait for it to finish. |
+| Container says `/app/data is not writable` | The mounted directory is owned by a different uid. Set `PUID`/`PGID` to `id -u`/`id -g` on the host. |
+| `docker compose pull` says denied on a ghcr.io image | The package is still private. Package settings → *Danger Zone* → *Change visibility* → *Public*. |
+| Videos load but will not play in the page | Some videos disallow embedding, and YouTube refuses the embed outright when the page sends no `Referer` — which is what happens if `Referrer-Policy` is set to suppress it. Use `strict-origin-when-cross-origin`. |

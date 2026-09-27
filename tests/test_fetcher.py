@@ -606,7 +606,7 @@ class FetcherTestCase(unittest.TestCase):
             cookie_path = Path(directory) / "cookies.txt"
             cookie_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
             with patch(
-                "fetcher._relative_environment_path", return_value=cookie_path
+                "fetcher._environment_path", return_value=cookie_path
             ), patch("fetcher._watch_history_entries", return_value=entries) as history:
                 videos = fetcher.fetch_watch_history(limit=7)
 
@@ -621,7 +621,7 @@ class FetcherTestCase(unittest.TestCase):
     def test_fetch_watch_history_reports_missing_cookies(self):
         with tempfile.TemporaryDirectory() as directory:
             missing_path = Path(directory) / "cookies.txt"
-            with patch("fetcher._relative_environment_path", return_value=missing_path):
+            with patch("fetcher._environment_path", return_value=missing_path):
                 with self.assertRaises(fetcher.LiveWatchLogUnavailableError):
                     fetcher.fetch_watch_history()
 
@@ -634,7 +634,7 @@ class FetcherTestCase(unittest.TestCase):
                 cookie_path = Path(directory) / "cookies.txt"
                 cookie_path.write_text("placeholder", encoding="utf-8")
                 with patch(
-                    "fetcher._relative_environment_path", return_value=cookie_path
+                    "fetcher._environment_path", return_value=cookie_path
                 ):
                     with self.assertRaises(fetcher.LiveWatchLogUnavailableError):
                         fetcher.fetch_watch_history()
@@ -863,7 +863,7 @@ class CookieJarAuthenticationTestCase(unittest.TestCase):
                 directory,
                 [".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\tsome-preference"],
             )
-            with patch("fetcher._relative_environment_path", return_value=path):
+            with patch("fetcher._environment_path", return_value=path):
                 with self.assertRaises(ProviderConfigurationError) as context:
                     fetcher.YouTubeInnerTubeClient.from_environment()
 
@@ -876,7 +876,7 @@ class CookieJarAuthenticationTestCase(unittest.TestCase):
                 directory,
                 [".youtube.com\tTRUE\t/\tTRUE\t0\tSAPISID\ta-session-value"],
             )
-            with patch("fetcher._relative_environment_path", return_value=path):
+            with patch("fetcher._environment_path", return_value=path):
                 client = fetcher.YouTubeInnerTubeClient.from_environment()
 
         self.assertIsNotNone(client._sapisid_authorization())

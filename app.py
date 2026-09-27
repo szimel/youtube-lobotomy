@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import uuid
+from collections.abc import Collection
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -231,7 +232,38 @@ def normalize_jev_config(payload: object, current: dict) -> tuple[dict | None, s
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
-def is_cross_site_write(method: str, headers, host: str) -> bool:
+def origin_host(value: str) -> str:
+    """The "host:port" of an origin, a bare hostname, or "" if it is unusable."""
+    value = value.strip().rstrip("/")
+    if not value:
+        return ""
+    return urlsplit(value if "//" in value else f"//{value}").netloc
+
+
+def allowed_write_hosts(host: str, headers=None) -> set[str]:
+    """The hosts whose pages may change this app's state.
+
+    The page's own host is always allowed. A reverse proxy in front of the app
+    (Caddy with a rewritten Host, or `tailscale serve`) reports the address the
+    browser actually used in X-Forwarded-Host, and comparing only against the
+    proxied Host would make every button return 403. Page script cannot forge
+    that header: anything outside the CORS-safelisted set forces a preflight,
+    and this app answers no preflights.
+
+    PUBLIC_ORIGINS covers a proxy that forwards neither: the public address can
+    be declared outright, as PUBLIC_ORIGINS=https://feed.example.com
+    """
+    hosts = {host}
+    if headers is not None:
+        forwarded = headers.get("X-Forwarded-Host", "")
+        hosts.update(filter(None, map(origin_host, forwarded.split(","))))
+    hosts.update(
+        filter(None, map(origin_host, os.environ.get("PUBLIC_ORIGINS", "").split(",")))
+    )
+    return hosts
+
+
+def is_cross_site_write(method: str, headers, hosts: Collection[str]) -> bool:
     """True when a state-changing request came from somewhere other than this app.
 
     Every route here is unauthenticated because the app is meant to be reachable
@@ -250,7 +282,7 @@ def is_cross_site_write(method: str, headers, host: str) -> bool:
     origin = headers.get("Origin")
     if origin:
         origin_host = urlsplit(origin).netloc
-        if origin_host and origin_host != host:
+        if origin_host and origin_host not in hosts:
             return True
 
     return False
@@ -853,7 +885,8 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.before_request
     def block_cross_site_writes():
-        if is_cross_site_write(request.method, request.headers, request.host):
+        hosts = allowed_write_hosts(request.host, request.headers)
+        if is_cross_site_write(request.method, request.headers, hosts):
             return (
                 jsonify(
                     {
@@ -870,6 +903,15 @@ def create_app(config: dict | None = None) -> Flask:
     @app.get("/")
     def index() -> str:
         return render_template("index.html")
+
+    @app.get("/healthz")
+    def healthz():
+        """Liveness probe for Docker, Caddy and anything else supervising this.
+
+        Deliberately touches no data file and starts no work, so a container
+        orchestrator can poll it cheaply without disturbing a running job.
+        """
+        return jsonify({"status": "ok"})
 
     @app.get("/api/feed")
     def get_feed():

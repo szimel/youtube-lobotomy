@@ -1,0 +1,22 @@
+# Credentials and state. data/ holds cookies.txt, which must never be baked
+# into an image that might be pushed to a registry, and .env holds the Jev key.
+.env
+data/
+.venv/
+venv/
+
+# Local tooling that has no place in a Linux image.
+run.ps1
+run.sh
+compose.yaml
+compose.yml
+docker-compose.yml
+.github/
+.gitignore
+.git/
+
+# Build noise.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/

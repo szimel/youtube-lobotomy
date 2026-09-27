@@ -541,12 +541,16 @@ def _innertube_config(document: str) -> InnerTubeConfig:
     )
 
 
-def _relative_environment_path(name: str, default: str) -> Path:
-    value = os.environ.get(name, default)
-    path = Path(value)
-    if path.is_absolute():
-        raise ProviderConfigurationError(f"{name} must use a relative path.")
-    return path
+def _environment_path(name: str, default: str) -> Path:
+    """Resolves a file path from the environment.
+
+    An absolute path has to be usable because a container mounts its
+    credentials on a volume (YOUTUBE_COOKIES_PATH=/data/cookies.txt). A relative
+    path is read from the working directory, which is where ./data lives. An
+    empty value counts as unset rather than as the current directory.
+    """
+    value = os.environ.get(name, default).strip() or default
+    return Path(value).expanduser()
 
 
 class _WarningCollectingLogger:
@@ -670,12 +674,7 @@ def _watch_history_entries(cookie_path: str, limit: int) -> list[dict[str, Any]]
 
 def fetch_watch_history(limit: int = MAX_HISTORY_ENTRIES) -> list[Video]:
     """Returns the account's most recent watch-history entries, newest first."""
-    try:
-        cookie_path = _relative_environment_path(
-            "YOUTUBE_COOKIES_PATH", "./data/cookies.txt"
-        )
-    except ProviderConfigurationError as error:
-        raise LiveWatchLogUnavailableError(str(error)) from error
+    cookie_path = _environment_path("YOUTUBE_COOKIES_PATH", "./data/cookies.txt")
 
     if not cookie_path.is_file():
         raise LiveWatchLogUnavailableError(
@@ -1079,7 +1078,7 @@ class YouTubeInnerTubeClient:
 
     @classmethod
     def from_environment(cls) -> YouTubeInnerTubeClient:
-        cookie_path = _relative_environment_path(
+        cookie_path = _environment_path(
             "YOUTUBE_COOKIES_PATH", "./data/cookies.txt"
         )
         if not cookie_path.is_file():

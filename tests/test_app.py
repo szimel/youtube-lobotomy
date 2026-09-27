@@ -295,6 +295,58 @@ class ApiTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_healthz_answers_without_touching_any_data(self):
+        response = self.client.get("/healthz")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"status": "ok"})
+
+    def test_a_write_through_a_proxy_that_rewrites_host_is_allowed(self):
+        # `tailscale serve` and Caddy with a rewritten Host both reach the app
+        # as localhost while the browser's page is on the public name.
+        response = self.client.post(
+            "/api/watch-later",
+            json=VIDEO,
+            headers={
+                "Origin": "https://feed.example.ts.net",
+                "Sec-Fetch-Site": "same-origin",
+                "X-Forwarded-Host": "feed.example.ts.net",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(self.client.get("/api/watch-later").get_json()), 1)
+
+    def test_a_declared_public_origin_is_allowed(self):
+        with patch.dict("os.environ", {"PUBLIC_ORIGINS": "https://feed.example.com"}):
+            response = self.client.post(
+                "/api/watch-later",
+                json=VIDEO,
+                headers={
+                    "Origin": "https://feed.example.com",
+                    "Sec-Fetch-Site": "same-origin",
+                },
+            )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_a_forwarded_host_does_not_allow_a_cross_site_write(self):
+        # The first check is the one that matters: a page on another site
+        # cannot send this header at all without a preflight, which is never
+        # approved, and its own Sec-Fetch-Site gives it away regardless.
+        response = self.client.post(
+            "/api/watch-later",
+            json=VIDEO,
+            headers={
+                "Origin": "https://evil.example",
+                "Sec-Fetch-Site": "cross-site",
+                "X-Forwarded-Host": "evil.example",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.client.get("/api/watch-later").get_json(), [])
+
     def test_each_run_is_added_to_the_history(self):
         with patch("app.fetch_latest_feed", return_value=outcome([VIDEO])):
             self.client.post("/api/refresh")

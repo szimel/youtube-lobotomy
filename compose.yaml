@@ -1,0 +1,52 @@
+# An example to copy into an existing docker-compose.yml.
+#
+# The app needs exactly two things from the host: a data directory and the Jev
+# API key. Everything else -- the YouTube session, the feed, the rulebook, the
+# transcript cache -- lives inside that one directory.
+#
+#   mkdir -p ./data
+#   # put cookies.txt and, if you like, .env beside this file
+#   docker compose up -d
+#
+# PUID/PGID only matter for a bind mount whose owner is not 1000:1000. Check
+# with `id -u` and `id -g` on the host. With a named volume they can be left out.
+
+services:
+  productivity-feed:
+    # Once the GitHub Actions workflow has published an image (see README),
+    # point this at it. Replace YOUR_GITHUB_USER with your account or org.
+    image: ghcr.io/YOUR_GITHUB_USER/youtube-lobotomy:latest
+
+    # Or, with no registry at all, build from a checkout or straight from the
+    # repository:
+    #   build: .
+    #   build: https://github.com/YOUR_GITHUB_USER/youtube-lobotomy.git
+    # With both keys present, Compose pulls first and only builds if the pull
+    # fails -- so `docker compose up -d` works either way. Add
+    # `pull_policy: build` to always use a local build instead.
+
+    container_name: productivity-feed
+    restart: unless-stopped
+    ports:
+      # host:container. To keep it off the LAN and reach it over Tailscale only,
+      # bind to the Tailscale address instead: "100.x.y.z:8087:8080".
+      - 8087:8080
+    environment:
+      # The only required variable. `env_file: [.env]` works too.
+      JEV_API_KEY: ${JEV_API_KEY:?set JEV_API_KEY, e.g. in the .env beside this file}
+      JEV_MODEL: jev-latest
+      # Match the owner of ./data on the host so the container can write to it.
+      PUID: 1000
+      PGID: 1000
+      # Only needed when something in front rewrites the Host header, which
+      # would otherwise make every button return 403.
+      # PUBLIC_ORIGINS: https://feed.example.com
+    volumes:
+      # cookies.txt, feed.json, settings.json and the transcript cache.
+      - ./data:/app/data
+    networks:
+      - caddy_net
+
+networks:
+  caddy_net:
+    external: true

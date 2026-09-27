@@ -10,3 +10,4 @@ data/runs.json
 data/watched.json
 data/transcripts/
 data/backups/
+tmp*/
