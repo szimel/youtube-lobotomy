@@ -149,20 +149,6 @@ function createButton(label, className, onClick) {
   return button;
 }
 
-function formatDuration(seconds) {
-  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
-    return "";
-  }
-  const total = Math.round(seconds);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  const pad = (value) => String(value).padStart(2, "0");
-  return hours
-    ? `${hours}:${pad(minutes)}:${pad(secs)}`
-    : `${minutes}:${pad(secs)}`;
-}
-
 function watchedIds() {
   return new Set(
     watched
@@ -181,38 +167,22 @@ function createVideoCard(video, saved) {
 
   const player = document.createElement("div");
   player.className = "player";
-  const poster = document.createElement("button");
-  poster.type = "button";
-  poster.className = "player-poster";
-  poster.setAttribute("aria-label", `Play ${video.title}`);
-
-  if (typeof video.thumbnail_url === "string" && video.thumbnail_url) {
-    const image = document.createElement("img");
-    image.className = "player-thumbnail";
-    image.src = video.thumbnail_url;
-    image.alt = "";
-    image.loading = "lazy";
-    image.referrerPolicy = "strict-origin-when-cross-origin";
-    poster.append(image);
-  }
-
-  const playBadge = document.createElement("span");
-  playBadge.className = "player-play";
-  playBadge.textContent = "▶";
-  poster.append(playBadge);
-
-  const duration = formatDuration(video.duration_seconds);
-  if (duration) {
-    const durationBadge = document.createElement("span");
-    durationBadge.className = "player-duration";
-    durationBadge.textContent = duration;
-    poster.append(durationBadge);
-  }
-
   const playerTarget = document.createElement("div");
   playerTarget.className = "player-target";
-  poster.addEventListener("click", () => activatePlayer(player, poster, video));
-  player.append(poster, playerTarget);
+  playerTarget.dataset.videoId = video.video_id;
+  // The video is embedded directly, with no play control of ours in front of it.
+  // The only thing that starts playback is YouTube's own play button, which is
+  // the click its view and watch-history tracking counts.
+  const embed = document.createElement("iframe");
+  embed.src = `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}`;
+  embed.title = video.title;
+  embed.loading = "lazy";
+  embed.referrerPolicy = "strict-origin-when-cross-origin";
+  embed.allow =
+    "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+  embed.allowFullscreen = true;
+  playerTarget.append(embed);
+  player.append(playerTarget);
 
   const details = document.createElement("div");
   details.className = "video-details";
@@ -292,45 +262,32 @@ function markCardWatchState(card, video) {
   }
 }
 
-// Clicking the poster opens the player and stops there. YouTube's IFrame API
-// reference is explicit: "A playback only counts toward a video's official view
-// count if it is initiated via a native play button in the player." Calling
-// playVideo() here would be programmatic playback, so the video would play
-// without ever registering -- which is the opposite of the point of watching it
-// here. The click that follows, on the player's own play button, is the one
-// that counts.
-function activatePlayer(player, poster, video) {
-  if (player.classList.contains("is-playing")) return;
-  const target = player.querySelector(".player-target");
-  if (!target) return;
-  player.classList.add("is-playing");
-  poster.hidden = true;
-  target.replaceChildren();
+// The player is already embedded and playable above. The API only attaches
+// itself for observation, and it observes a player the user drives with
+// YouTube's own play button -- nothing here starts playback, because a view the
+// page starts itself does not register with YouTube.
+function mountPlayers(container, videos) {
+  const targets = container.querySelectorAll(".player-target[data-video-id]");
+  if (!targets.length) return;
 
+  const videosById = new Map(videos.map((video) => [video.video_id, video]));
   loadYouTubePlayerApi()
     .then((YT) => {
-      const mount = document.createElement("div");
-      target.append(mount);
-      const instance = new YT.Player(mount, {
-        videoId: video.video_id,
-        playerVars: { rel: 0, playsinline: 1, autoplay: 0 },
-        events: {
-          onStateChange: (event) => handlePlayerState(video, event),
-        },
+      targets.forEach((target) => {
+        const video = videosById.get(target.dataset.videoId);
+        if (!video || target.isConnected === false) return;
+        const instance = new YT.Player(target, {
+          videoId: video.video_id,
+          playerVars: { rel: 0, playsinline: 1 },
+          events: {
+            onStateChange: (event) => handlePlayerState(video, event),
+          },
+        });
+        activePlayers.push(instance);
       });
-      activePlayers.push(instance);
     })
     .catch(() => {
-      // Without the API the plain embed still plays; only observation is lost.
-      const fallback = document.createElement("iframe");
-      fallback.src = `https://www.youtube.com/embed/${encodeURIComponent(
-        video.video_id,
-      )}`;
-      fallback.title = video.title;
-      fallback.allow =
-        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-      fallback.allowFullscreen = true;
-      target.replaceChildren(fallback);
+      // The plain embed already on the page keeps working without observation.
     });
 }
 
@@ -350,6 +307,7 @@ function renderList(container, videos, saved, emptyMessage) {
     fragment.append(createVideoCard(video, saved)),
   );
   container.append(fragment);
+  mountPlayers(container, validVideos);
 }
 
 function visibleFeed() {
@@ -1187,7 +1145,9 @@ function addWatchLaterCard(video) {
   if (existing) return;
 
   elements.watchLaterList.querySelector(".empty-state")?.remove();
-  elements.watchLaterList.append(createVideoCard(video, true));
+  const card = createVideoCard(video, true);
+  elements.watchLaterList.append(card);
+  mountPlayers(card, [video]);
   updateWatchLaterCount();
 }
 
@@ -1373,8 +1333,8 @@ function loadYouTubePlayerApi() {
   return youtubePlayerApi;
 }
 
-// Cards are activated one at a time by a click (see activatePlayer), so there is
-// no eager mounting step any more.
+// Every card is mounted by mountPlayers as it is rendered, so tearing the grid
+// down means destroying those players and dropping the playback they tracked.
 function destroyPlayers() {
   flushPlayback();
   activePlayers.forEach((player) => {

@@ -231,69 +231,6 @@ h2 {
   border: 0;
 }
 
-/* A card shows its thumbnail until it is clicked: a grid of twenty live embeds
-   is slow to load, and rebuilding them is what used to reset a playing video. */
-.player-poster {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: #20271f;
-  cursor: pointer;
-}
-
-/* `display: block` above would otherwise beat the browser's [hidden] rule. */
-.player-poster[hidden] {
-  display: none;
-}
-
-.player-poster:hover .player-play,
-.player-poster:focus-visible .player-play {
-  background: #1d5c43;
-}
-
-.player-thumbnail {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.82;
-}
-
-.player-play {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: #156a4c;
-  color: #fdfcf6;
-  font-size: 1.1rem;
-  transform: translate(-50%, -50%);
-}
-
-.player-duration {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: rgba(20, 24, 19, 0.86);
-  color: #f6f4ea;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.74rem;
-}
-
-.video-card.is-watched .player-thumbnail {
-  opacity: 0.5;
-}
-
 .watched-chip {
   display: inline-block;
   margin-bottom: 8px;

@@ -1,13 +1,5 @@
 [
   {
-    "video_id": "C5KPenVUHew",
-    "title": "Tailscale vs WireGuard vs Headscale: Who Holds Your Keys?",
-    "channel_name": "Devsplainers",
-    "description": "",
-    "thumbnail_url": "https://i.ytimg.com/vi/C5KPenVUHew/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLBkPRxFNS484jtN0-Iem8k4EHQIaA",
-    "curation_reason": "This video provides a deep dive into networking and security, comparing different VPN technologies, which is valuable for learning about server configuration and networking."
-  },
-  {
     "video_id": "PN8EdlYyuXk",
     "title": "Can a Homemade Water Wheel Generate Electricity?",
     "channel_name": "Orange made",
@@ -30,23 +22,6 @@
     "description": "",
     "thumbnail_url": "https://i.ytimg.com/vi/QC6A7xiBi3s/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLANXiWKTFPLY91kl2xn67X3x60jPw",
     "curation_reason": "This video likely explores a piece of hardware, fitting the user's interest in tangible hardware modifications."
-  },
-  {
-    "video_id": "0SerEuqAlAA",
-    "title": "I built a MODERN apple iPod...",
-    "channel_name": "Zac Builds",
-    "description": "Let's build the ultimate, modernized, iPod! Buy the LTT Precision Bit Set here: https://lmg.gg/zacprecision Join this channel to get\u00a0...",
-    "thumbnail_url": "https://i.ytimg.com/vi/0SerEuqAlAA/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDxB73kLwXFqnU-0WnJxg2nCtL9Ng",
-    "published_at": "1y ago",
-    "curation_reason": "This video involves tangible hardware modifications, which aligns with the user's interest in niche hobbies and skills."
-  },
-  {
-    "video_id": "4qdPcMNaioA",
-    "title": "Avoiding Bot Detection While Automating Microsoft Rewards",
-    "channel_name": "User0332",
-    "description": "In this video, I write an automation tool for Microsoft Rewards that completes every daily task for me: clicking on cards, performing searches, completing \"Explore on Bing\" tasks, and more!\n\nAlong the way, I implement techniques to mask the program as a human, including realistic mouse movement, typing, and action delays.\n\nThe source for this project can be found at https://github.com/User0332/rewards-farmer\n\n0:00 Intro\n0:53 Rewards Tasks\n2:55 Setting up the WebDriver\n4:20 Recording Keyboard Data\n4:52 Change of Plans\n5:32 Mimicking Human Mouse Movement\n10:49 Mimicking Human Keyboard Typing\n11:30 Integrating LLMs\n12:35 Putting it All Together\n13:13 Final Full Runthrough\n16:09 Conclusion",
-    "thumbnail_url": "https://i.ytimg.com/vi/4qdPcMNaioA/hqdefault.jpg?sqp=-oaymwEgCOADEI4CSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAJ8TGNMVSWD_ie6SdRdAo7jZV3fQ",
-    "curation_reason": "Passed every rule: Teaches something real 0.76"
   },
   {
     "video_id": "3YtygAx_C6A",
@@ -73,5 +48,59 @@
     "thumbnail_url": "https://i.ytimg.com/vi/3a-X6FZfl2Y/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLA5a7NCk1_QkqeGMnkb-u2IYoGegw",
     "curation_reason": "Passed every rule: Teaches something real 0.81",
     "duration_seconds": 955
+  },
+  {
+    "video_id": "GzgzvLPa0G0",
+    "title": "Slow walk through a convolutional neural network",
+    "channel_name": "Alexander Gustafsson",
+    "description": "Inference of a handwritten digit of the MNIST dataset represented as a 28x28 pixel raster image is shown in a hopefully clear way. The convolutional neural network, CNN, is scarcely trained for the sole purpose of the final probabilities to be slightly more spread out. Further, the architecture is just an example, although it seems working pretty well for sufficiently trained weights/filters. \n\nThis is a re-upload. This since the original had some annoying re-encoding glitches I couldn't stand.\n\nMusic by  @gpcbass , called SevenEight made yesterday.\n\nLanguages/tools: Python, JavaScript, GPT 6 Astra, FFmpeg",
+    "thumbnail_url": "https://i.ytimg.com/vi/GzgzvLPa0G0/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLATZGIqkXV4olcfU4de8NMEuaHOsQ",
+    "curation_reason": "Passed every rule: Teaches something real 0.82",
+    "duration_seconds": 411
+  },
+  {
+    "video_id": "7yVFZn87TkY",
+    "title": "I Built a Self Landing Satellite",
+    "channel_name": "I Build Stuff",
+    "description": "Check out PCBWay at https://www.pcbway.com for PCB manufacturing, 3D printing, and CNC services.\n\nCanSat competition: https://www.esa.int/Education/CanSat\n\nCurrent subscriber count: 96899\nCurrent view count: 6,016,520\n\nContact: ibuildstuffyt@gmail.com\n\nMy favourite 3D printers:\nProfessional 3D Printer ($300 off): https://tidd.ly/3Yu0bHI\nBest Mid-range 3D Printer: https://tidd.ly/4qbxF9K\nBest Budget 3D Printer ($160 off): https://tidd.ly/4psCgDu\n\nYouTube/Filmmaking Gear (affiliate links):\nCamera: https://amzn.to/4aG7Nvv\nLens: https://amzn.to/3S8JHm0\nCamera Mic: https://amzn.to/3H67bSf\nTripod: https://amzn.to/3RLevYo\nVoiceover Mic: https://amzn.to/3OcSh0H\nDrone: https://amzn.to/3TQCxUv\n\nMusic Used:\nHow to Train Your Dragon Medley - Taryn Harbridge\nhttps://youtu.be/vlHnykBkLds?si=-iv71bBQZVbp4KxL\n(Huge thanks for giving me permission to use this cover!)\nHaunt Muskie - C418\nNo Time to Explain - Good Kid",
+    "thumbnail_url": "https://i.ytimg.com/vi/7yVFZn87TkY/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLCU9ADl7Jt-IM-LBfrHQImjQJF0ng",
+    "curation_reason": "Passed every rule: Teaches something real 0.63",
+    "duration_seconds": 929
+  },
+  {
+    "video_id": "oi91kE_wocs",
+    "title": "The Most Controversial Idea In Physics",
+    "channel_name": "SciencePetr",
+    "description": "I've wanted to make this video for almost 10 years. I am so happy to finally have this out. This is a video about cosmological fine tuning.\n\nA MASSIVE thank you to Geraint Lewis for his time, the interview, writing the book, and being so supportive of Veritasium, me, and SciComm over the past decade. All of the good parts of the video are his, all the mistakes are mine.\n\nThanks to Derek Muller for the chats about the intro! You're a legend.\n\nBuy his books! https://www.geraintflewis.com\n\nMy Patreon -- https://www.patreon.com/c/SciencePetr\n\nBooks!\nA Fortunate Universe By Geraint Lewis and Luke Barnes\nJust Six Numbers by Martin Rees\nThe Anthropic Cosmological Principle by John Barrow and Frank Tipler\n\nThe Steve Mould Video! It's SO GOOD. I love Steve's work so much -- https://www.youtube.com/watch?v=70-_GBymrck\n\n\nReferences -- https://docs.google.com/document/d/1EVUpDGxeGRI1cSpaB3wo7psZndfae-2b61EvP_sy5Ko/edit?tab=t.0\n\nWritten / Directed / Yadayada by Petr Lebedev\nIllustrations by Rapha\u00ebl Aubry\nEdited by Trenton Oliver\nAssistant editor Yan Zhang\n\n\nI receive philanthropic funding to support these videos, but all of the opinions are always my own.",
+    "thumbnail_url": "https://i.ytimg.com/vi/oi91kE_wocs/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLC3ivFwZhWjcunZop4AWqGPrvCirw",
+    "curation_reason": "Passed every rule: Teaches something real 0.63",
+    "duration_seconds": 1602
+  },
+  {
+    "video_id": "GGWHjAyKJCA",
+    "title": "Can I Make a Better AI Than AI?",
+    "channel_name": "commonLuke",
+    "description": "Review PRs faster with CodeRabbit: https://coderabbit.link/ad-common-luke-001\n\nYou can support this video by hyping the video, liking, subscribing, or becoming a member : )\n\nWatch the extended cut of this video: https://youtu.be/t2obk0E8xD0?si=52631R-LipTBA2Cv\nPLEASE follow me on instagram : ): https://www.instagram.com/fakeluke_/\nSelf Driving Car Tutorial: https://youtu.be/Rs_rAxEsAvI?si=DrGXRYKgj8n1PXyH\n\nThis video was sponsored by CodeRabbit",
+    "thumbnail_url": "https://i.ytimg.com/vi/GGWHjAyKJCA/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLB5O5uSNrW7zkn3msNep8oHejiwHw",
+    "curation_reason": "Passed every rule: Teaches something real 0.63",
+    "duration_seconds": 976
+  },
+  {
+    "video_id": "YJJk0iLJ4Ks",
+    "title": "I Made a 3D Graphing Calculator with just Redstone!",
+    "channel_name": "mattbatwings",
+    "description": "Learn for free on Brilliant for a full 30 days: https://brilliant.org/mattbatwings/\nYou\u2019ll also get 20% off an annual Premium subscription.\n\nPatreon: https://www.patreon.com/mattbatwings\nDiscord: https://discord.gg/V5KFaF63mV\nCheckout my SPOTIFY: https://open.spotify.com/show/2nxhSuIC3IxG8NmvEhwFLT\nMy socials: https://linktr.ee/mattbatwings\nMy texture pack: https://modrinth.com/resourcepack/mattpack\nWorld Download: (JAVA 1.21.4) https://www.planetminecraft.com/project/3d-graphing-calculator-6892754/\n\nThank you \u200b\u2060Sloimay and @MythicalPingu for all your help and for the printer, and thank you to everyone else who contributed to this amazing project!\nThumbnail made by @Activation123 \n\nSets used:\nClassroom: https://www.planetminecraft.com/project/classroom-for-teachers/\nGaming Setup: https://www.planetminecraft.com/project/gaming-setup-5101689/\n\nSupporting code: https://github.com/mattbatwings/3D-Graphing-Calculator\n\nHey @Desmos check this out!\n\n-------------------------\n\nWant to get more involved in the logical redstone community?\nLearn Logical Redstone! https://youtube.com/playlist?list=PL5LiOvrbVo8keeEWRZVaHfprU4zQTCsV4\nOpen Redstone Engineers (ORE): https://openredstone.org/\n\nMusic (in order):\nCyberpunk Synthwave - New Beginnings (Karl Casey @ White Bat Audio) https://youtu.be/sb0KmujRVCo\nmassobeats - until then https://youtu.be/7FrSki6hvzs\nmassobeats - chilly  https://youtu.be/UbwxYGj5phk\nHarris Heller - Lunar Door https://open.spotify.com/track/4VBszdhKkGQ9S7a2NYgTst\nmassobeats - moonlit https://youtu.be/EVYqttlFiKs\nHarris Heller - Guilty Spark https://open.spotify.com/track/010DZPGIQLKzRFatAKS59N\nHarris Heller - Path Less Traveled https://open.spotify.com/track/4qTBB6qI9kIQLSM6zrCpCb\nHarris Heller - Plethora https://open.spotify.com/track/5Zs5xeXaiKTcEIy2QmnT0o\nHarris Heller - One More https://open.spotify.com/track/6MrGxiWd7QxvaSuTphRbHj\nmassobeats - thoughts https://youtu.be/OAEE57AwAzc\nmassobeats - lotus https://youtu.be/0RygB-mapsk\nLukrembo - Branch https://youtu.be/xPOy2pkImiU\nLukrembo  - Green Symphony https://youtu.be/qtbl_7cSLMI\nLukrembo  - Jay https://youtu.be/1zmJ_4kGYUU\nLukrembo  - Rose https://youtu.be/XIhyti2Qa74\nHarris Heller - Mood Swings https://open.spotify.com/track/04cpJwd1xDXSymhg7PQrjt\nHarris Heller - Dark Matter https://open.spotify.com/track/4avk1dsdSOPC6d83BZ3kme\nHarris Heller - The White Fox https://open.spotify.com/track/6Dnd\nHelynt - Moog City https://youtu.be/s0FP5iFsV3Y\nunfeel - kinda love https://youtu.be/-dSB_SwTpL4\nCreo - Wavelight https://youtu.be/Kc4lIlboH2M\nHarris Heller - Play It Again, Sam https://open.spotify.com/track/3Vait6nnB1G2wnOZLhDKlt\nMOST TRACKS CAN BE FOUND HERE - https://freetouse.com/music\n\nThis video was sponsored by Brilliant",
+    "thumbnail_url": "https://i.ytimg.com/vi/YJJk0iLJ4Ks/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAaRjmkt_c5gQ4D9JNBkaF-SG9-fg",
+    "curation_reason": "Passed every rule: Teaches something real 0.87",
+    "duration_seconds": 1663
+  },
+  {
+    "video_id": "ZkOFtDY2js4",
+    "title": "Forcing Danny Gonzalez to watch an insane movie",
+    "channel_name": "Drew Gooden",
+    "description": "",
+    "thumbnail_url": "https://i.ytimg.com/vi/ZkOFtDY2js4/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLBm4iogO0P8ENFUCcLsgu8w-9WaVQ",
+    "curation_reason": "Trusted creator \u2014 always included regardless of AI score.",
+    "duration_seconds": 1388
   }
 ]
