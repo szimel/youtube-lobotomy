@@ -8,57 +8,6 @@
     "curation_reason": "This video explores a tangible hardware modification and renewable energy project, fitting the user's interest in creative real-world activities."
   },
   {
-    "video_id": "mntjF2vmYFU",
-    "title": "Making assumptions to make my code less clunky",
-    "channel_name": "sphaerophoria",
-    "description": "",
-    "thumbnail_url": "https://i.ytimg.com/vi/mntjF2vmYFU/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLDnGjt8IkL4rb51vPVBp6CLllXH4g",
-    "curation_reason": "This video likely provides insights into programming techniques, which aligns with the user's interest in programming tutorials."
-  },
-  {
-    "video_id": "QC6A7xiBi3s",
-    "title": "What the heck IS this thing?",
-    "channel_name": "Hardware Haven",
-    "description": "",
-    "thumbnail_url": "https://i.ytimg.com/vi/QC6A7xiBi3s/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLANXiWKTFPLY91kl2xn67X3x60jPw",
-    "curation_reason": "This video likely explores a piece of hardware, fitting the user's interest in tangible hardware modifications."
-  },
-  {
-    "video_id": "3YtygAx_C6A",
-    "title": "A Walkable ASCII Cyberpunk City in One HTML File",
-    "channel_name": "Grow Now! Games",
-    "description": "Update: With the recent release of Prototype 2, I've made Prototype 1 free to access: https://ko-fi.com/grownowgames/shop\n\nI wanted to build a city that feels alive, but is made entirely from ASCII characters.\n\nThis is a small custom engine built with JavaScript and Canvas \u2014 no Unity, Unreal, 3D models, textures, or shaders. The world is a grid-based city with roads, buildings, trees, cars, and pedestrians. \n\nEvery frame, the engine raycasts from the camera to work out perspective, depth, collisions, and what should be visible, then draws it all using letters, numbers, and symbols.\n\nIn other words: it\u2019s a tiny 3D city made from blocks, viewed through a screen of ASCII characters.\n\nStill a work in progress, but I\u2019m going to keep pushing the atmosphere, detail, and interaction further.\n\n#ASCII #ASCIICity #Cyberpunk #IndieDev #GameDev #JavaScript #HTML5Canvas #Raycasting #CreativeCoding #ProceduralGeneration #CodingProject",
-    "thumbnail_url": "https://i.ytimg.com/vi/3YtygAx_C6A/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLAr87Vv1wJgsWJC_awnEtAo3pyAXg",
-    "curation_reason": "Passed every rule: Teaches something real 0.53"
-  },
-  {
-    "video_id": "LzivS_KzffY",
-    "title": "I Built a Custom GPU-Driven Rendering Pipeline (10x Faster)",
-    "channel_name": "Incandescent Games",
-    "description": "Support PlanetSmith & Alpha Access: https://planetsmith.world/store?utm_source=Devlog25\nWishlist on Steam: https://store.steampowered.com/app/2539340/PlanetSmith/ \nJoin our Discord: https://discord.gg/eSS2pYU7Nw\n\nIn my last devlog I replaced physics meshes with a custom voxel system. That got me thinking, could I do the same for rendering? Turns out yes, and the results are wild.\n\nIn this devlog I build a custom GPU-driven rendering pipeline using indirect rendering, upload vertex data straight to the GPU with no mesh objects at all, add octree-based frustum culling that runs entirely on the graphics card, and compress our vertex format down to a fraction of its original size. End result: a 10x performance boost, planets rendered at full detail, and over a billion vertices on screen at once.",
-    "thumbnail_url": "https://i.ytimg.com/vi/LzivS_KzffY/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLDD1iBo21VkdMKn8U_CZDbMUG8qQA",
-    "curation_reason": "Passed every rule: Teaches something real 0.83",
-    "duration_seconds": 1137
-  },
-  {
-    "video_id": "3a-X6FZfl2Y",
-    "title": "Why Jailbreaking Calculators Is (Unfortunately) a Thing Now",
-    "channel_name": "Dammit Jeff",
-    "description": "Be kind to yourself this year. Go to my sponsor https://zocdoc.com/dammitjeff and find the awesome care you deserve for FREE\n\nJoin the Cemetech server!! LOTS of Calculator nerds in there :) \nhttps://discord.gg/DXnnfq9ytt\n\nArtifice Jailbreak: https://yvantt.github.io/arTIfiCE/\nCE Libraries: https://github.com/CE-Programming/libraries/releases\nThe Calculator I used in the video: https://amzn.to/44rZ2n5\nLinks to long list of Shells: https://www.cemetech.net/downloads/browse84pce/asm/shells\nLinks to bunch of Games: https://www.cemetech.net/downloads/browse/?sort=downloads_desc\nAwesome Calculator Resources: https://github.com/TI-Toolkit/awesome-ti-docs\nMyCalcs: https://my.calcs.quest/?ref=1399\nTiCalc: https://www.ticalc.org/pub/\n@TheLastMillennial 's coverage on the TI drama, REALLY great video: https://www.youtube.com/watch?v=dSkN0aMswXs\n\n0:00 - Why Jailbreaking Calculators is necessary \n5:02 - How to Jailbreak your Ti84+CE\n6:46 - Shells for your Calculator\n9:42 - Games\n13:12 - Other Calc Modding Scenes\n\n\nSupport the Channel: https://patreon.com/dammit_jeff\nJoin the Discord!: https://discord.gg/MhTNvkNY3B\nFollow me on bluesky!!: https://bsky.app/profile/dammitjeff.com\nKeep up with me on Instagram!: https://instagram.com/dammit_jeff\nAlso on twitch now!: https://twitch.tv/dammitjeff\n\nFor business inquiries reach out to me here!: \ndammit.jeff@intheblackmedia.com",
-    "thumbnail_url": "https://i.ytimg.com/vi/3a-X6FZfl2Y/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLA5a7NCk1_QkqeGMnkb-u2IYoGegw",
-    "curation_reason": "Passed every rule: Teaches something real 0.81",
-    "duration_seconds": 955
-  },
-  {
-    "video_id": "GzgzvLPa0G0",
-    "title": "Slow walk through a convolutional neural network",
-    "channel_name": "Alexander Gustafsson",
-    "description": "Inference of a handwritten digit of the MNIST dataset represented as a 28x28 pixel raster image is shown in a hopefully clear way. The convolutional neural network, CNN, is scarcely trained for the sole purpose of the final probabilities to be slightly more spread out. Further, the architecture is just an example, although it seems working pretty well for sufficiently trained weights/filters. \n\nThis is a re-upload. This since the original had some annoying re-encoding glitches I couldn't stand.\n\nMusic by  @gpcbass , called SevenEight made yesterday.\n\nLanguages/tools: Python, JavaScript, GPT 6 Astra, FFmpeg",
-    "thumbnail_url": "https://i.ytimg.com/vi/GzgzvLPa0G0/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLATZGIqkXV4olcfU4de8NMEuaHOsQ",
-    "curation_reason": "Passed every rule: Teaches something real 0.82",
-    "duration_seconds": 411
-  },
-  {
     "video_id": "7yVFZn87TkY",
     "title": "I Built a Self Landing Satellite",
     "channel_name": "I Build Stuff",
@@ -77,15 +26,6 @@
     "duration_seconds": 1602
   },
   {
-    "video_id": "GGWHjAyKJCA",
-    "title": "Can I Make a Better AI Than AI?",
-    "channel_name": "commonLuke",
-    "description": "Review PRs faster with CodeRabbit: https://coderabbit.link/ad-common-luke-001\n\nYou can support this video by hyping the video, liking, subscribing, or becoming a member : )\n\nWatch the extended cut of this video: https://youtu.be/t2obk0E8xD0?si=52631R-LipTBA2Cv\nPLEASE follow me on instagram : ): https://www.instagram.com/fakeluke_/\nSelf Driving Car Tutorial: https://youtu.be/Rs_rAxEsAvI?si=DrGXRYKgj8n1PXyH\n\nThis video was sponsored by CodeRabbit",
-    "thumbnail_url": "https://i.ytimg.com/vi/GGWHjAyKJCA/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLB5O5uSNrW7zkn3msNep8oHejiwHw",
-    "curation_reason": "Passed every rule: Teaches something real 0.63",
-    "duration_seconds": 976
-  },
-  {
     "video_id": "YJJk0iLJ4Ks",
     "title": "I Made a 3D Graphing Calculator with just Redstone!",
     "channel_name": "mattbatwings",
@@ -102,5 +42,14 @@
     "thumbnail_url": "https://i.ytimg.com/vi/ZkOFtDY2js4/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLBm4iogO0P8ENFUCcLsgu8w-9WaVQ",
     "curation_reason": "Trusted creator \u2014 always included regardless of AI score.",
     "duration_seconds": 1388
+  },
+  {
+    "video_id": "jXzARHsTBQY",
+    "title": "This Ring of Plasma Could Change the World",
+    "channel_name": "The Action Lab",
+    "description": "Spend less time searching and more time with the people who matter most. Head to https://zocdoc.com/actionlab to find and book the care you need. \ud83e\udd27 #sponsored",
+    "thumbnail_url": "https://i.ytimg.com/vi/jXzARHsTBQY/hq720.jpg?sqp=-oaymwEgCNAFEJQDSFXyq4qpAxIIARUAAIhCGAFwAcABBrgC9xg=&rs=AOn4CLDeI4uFT58BNJn90GkfJrdj5EcU7A",
+    "curation_reason": "Passed every rule: Teaches something real 0.90",
+    "duration_seconds": 661
   }
 ]

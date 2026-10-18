@@ -167,22 +167,34 @@ function createVideoCard(video, saved) {
 
   const player = document.createElement("div");
   player.className = "player";
-  const playerTarget = document.createElement("div");
-  playerTarget.className = "player-target";
-  playerTarget.dataset.videoId = video.video_id;
-  // The video is embedded directly, with no play control of ours in front of it.
-  // The only thing that starts playback is YouTube's own play button, which is
-  // the click its view and watch-history tracking counts.
-  const embed = document.createElement("iframe");
-  embed.src = `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}`;
-  embed.title = video.title;
-  embed.loading = "lazy";
-  embed.referrerPolicy = "strict-origin-when-cross-origin";
-  embed.allow =
-    "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-  embed.allowFullscreen = true;
-  playerTarget.append(embed);
-  player.append(playerTarget);
+  // Nothing of YouTube loads with the page: a card shows a thumbnail and a
+  // pixel play button, and the player itself mounts on this click. Playback
+  // still begins only at YouTube's own play button inside the mounted player,
+  // which is the click its view and watch-history tracking counts — the facade
+  // only decides when the player (and its memory) is allowed to exist.
+  const facade = document.createElement("button");
+  facade.type = "button";
+  facade.className = "player-facade";
+  facade.setAttribute("aria-label", `Load the player for ${video.title}`);
+
+  const thumb = document.createElement("img");
+  thumb.className = "player-thumb";
+  thumb.src = `https://i.ytimg.com/vi/${encodeURIComponent(video.video_id)}/mqdefault.jpg`;
+  thumb.alt = "";
+  thumb.loading = "lazy";
+  thumb.addEventListener("error", () => thumb.remove());
+  facade.append(thumb);
+
+  const glyph = document.createElement("span");
+  glyph.className = "player-facade-glyph";
+  glyph.setAttribute("aria-hidden", "true");
+  facade.append(glyph);
+
+  facade.addEventListener("click", () => {
+    facade.remove();
+    mountPlayer(player, video);
+  });
+  player.append(facade);
 
   const details = document.createElement("div");
   details.className = "video-details";
@@ -195,13 +207,6 @@ function createVideoCard(video, saved) {
     channel.className = "channel-name";
     channel.textContent = video.channel_name;
     details.append(channel);
-  }
-
-  if (video.description) {
-    const description = document.createElement("p");
-    description.className = "description";
-    description.textContent = video.description;
-    details.append(description);
   }
 
   if (typeof video.curation_reason === "string" && video.curation_reason) {
@@ -262,32 +267,39 @@ function markCardWatchState(card, video) {
   }
 }
 
-// The player is already embedded and playable above. The API only attaches
-// itself for observation, and it observes a player the user drives with
-// YouTube's own play button -- nothing here starts playback, because a view the
-// page starts itself does not register with YouTube.
-function mountPlayers(container, videos) {
-  const targets = container.querySelectorAll(".player-target[data-video-id]");
-  if (!targets.length) return;
+// One card's player mounts when the person asks for it. The IFrame API only
+// attaches itself for observation, and it observes a player the user drives
+// with YouTube's own play button -- nothing here starts playback, because a
+// view the page starts itself does not register with YouTube.
+function mountPlayer(player, video) {
+  const target = document.createElement("div");
+  target.className = "player-target";
+  target.dataset.videoId = video.video_id;
+  player.append(target);
 
-  const videosById = new Map(videos.map((video) => [video.video_id, video]));
   loadYouTubePlayerApi()
     .then((YT) => {
-      targets.forEach((target) => {
-        const video = videosById.get(target.dataset.videoId);
-        if (!video || target.isConnected === false) return;
-        const instance = new YT.Player(target, {
-          videoId: video.video_id,
-          playerVars: { rel: 0, playsinline: 1 },
-          events: {
-            onStateChange: (event) => handlePlayerState(video, event),
-          },
-        });
-        activePlayers.push(instance);
+      if (target.isConnected === false) return;
+      const instance = new YT.Player(target, {
+        videoId: video.video_id,
+        playerVars: { rel: 0, playsinline: 1 },
+        events: {
+          onStateChange: (event) => handlePlayerState(video, event),
+        },
       });
+      activePlayers.push(instance);
     })
     .catch(() => {
-      // The plain embed already on the page keeps working without observation.
+      // Without the API, the plain embed still plays -- just unobserved.
+      const embed = document.createElement("iframe");
+      embed.src = `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}`;
+      embed.title = video.title;
+      embed.loading = "lazy";
+      embed.referrerPolicy = "strict-origin-when-cross-origin";
+      embed.allow =
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+      embed.allowFullscreen = true;
+      target.replaceChildren(embed);
     });
 }
 
@@ -307,7 +319,6 @@ function renderList(container, videos, saved, emptyMessage) {
     fragment.append(createVideoCard(video, saved)),
   );
   container.append(fragment);
-  mountPlayers(container, validVideos);
 }
 
 function visibleFeed() {
@@ -1147,7 +1158,6 @@ function addWatchLaterCard(video) {
   elements.watchLaterList.querySelector(".empty-state")?.remove();
   const card = createVideoCard(video, true);
   elements.watchLaterList.append(card);
-  mountPlayers(card, [video]);
   updateWatchLaterCount();
 }
 
@@ -1333,8 +1343,9 @@ function loadYouTubePlayerApi() {
   return youtubePlayerApi;
 }
 
-// Every card is mounted by mountPlayers as it is rendered, so tearing the grid
-// down means destroying those players and dropping the playback they tracked.
+// Players mount on demand from their facades, but a re-render still tears the
+// grid down, so the ones that were opened are destroyed here and the playback
+// they tracked is dropped.
 function destroyPlayers() {
   flushPlayback();
   activePlayers.forEach((player) => {

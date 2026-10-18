@@ -11,3 +11,8 @@ data/watched.json
 data/transcripts/
 data/backups/
 tmp*/
+
+# The frontend is plain JS/CSS with no build step; puppeteer-core and other
+# QA tooling live outside the repository.
+node_modules/
+package-lock.json
