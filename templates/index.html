@@ -3,16 +3,46 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f4f1e8">
+    <meta name="theme-color" content="#241c3f">
     <title>Productivity Feed</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
   <body>
+    <div class="scene" aria-hidden="true">
+      <img
+        class="scene-art"
+        src="{{ url_for('static', filename='img/scene.png') }}"
+        alt=""
+        width="640"
+        height="357"
+      >
+      <canvas class="scene-canvas"></canvas>
+      <div class="scene-scan"></div>
+      <div class="scene-grain"></div>
+      <div class="scene-vignette"></div>
+    </div>
+
     <div class="page-shell">
       <header class="site-header">
-        <div>
-          <p class="eyebrow">Curated YouTube</p>
-          <h1>Productivity Feed</h1>
+        <div class="title-block">
+          <svg class="pixel-emblem" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+            <rect x="2" y="6" width="4" height="8" fill="#e8d5b5"/>
+            <rect x="6" y="3" width="4" height="11" fill="#f2e3c6"/>
+            <rect x="10" y="7" width="4" height="7" fill="#d9c2a0"/>
+            <rect x="3" y="4" width="2" height="2" fill="#f2b75c"/>
+            <rect x="7" y="1" width="2" height="2" fill="#f2b75c"/>
+            <rect x="11" y="5" width="2" height="2" fill="#f2b75c"/>
+            <rect x="7" y="5" width="2" height="3" fill="#e0655c"/>
+            <rect x="3" y="9" width="2" height="2" fill="#7fd67a"/>
+            <rect x="11" y="10" width="2" height="2" fill="#7fd67a"/>
+            <rect x="0" y="13" width="16" height="1" fill="#7fa84e"/>
+            <rect x="0" y="14" width="16" height="2" fill="#5c8a3c"/>
+          </svg>
+          <div>
+            <p class="eyebrow">Curated YouTube</p>
+            <h1>Productivity Feed</h1>
+          </div>
         </div>
         <div class="header-actions">
           <form id="search-form" class="search-form" role="search">
@@ -320,6 +350,7 @@
     <template id="empty-state-template">
       <p class="empty-state"></p>
     </template>
+    <script type="module" src="{{ url_for('static', filename='scene.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
   </body>
 </html>
